@@ -1,6 +1,6 @@
 """
 Plexa Housing — AI Client
-Two Claude calls: cheap junk filter (Haiku) then structured extraction (Opus).
+Two GPT calls: cheap junk filter (gpt-4o-mini) then structured extraction (gpt-4o).
 Anti-hallucination contract enforced here.
 """
 

@@ -3,7 +3,7 @@ Plexa Housing — API Server
 Flask server for webhook ingestion + demo API.
 
 Usage:
-  ANTHROPIC_API_KEY=sk-... python server.py
+  OPENAI_API_KEY=sk-... python server.py
 """
 
 import os

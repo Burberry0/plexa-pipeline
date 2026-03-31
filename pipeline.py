@@ -24,8 +24,8 @@ logger = logging.getLogger("plexa.pipeline")
 class Pipeline:
     """
     Main orchestrator. Processes a single email through the full chain:
-      1. Junk filter (Haiku)
-      2. AI extraction (Opus) — only if LEAD
+      1. Junk filter (gpt-4o-mini)
+      2. AI extraction (gpt-4o) — only if LEAD
       3. Tier classification — only if extracted
       4. Airtable upsert — Tier 1/2 only (stubbed for demo)
       5. Auto-reply — with guardrails (stubbed for demo)

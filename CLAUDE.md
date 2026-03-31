@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 pip install -r requirements.txt
 
 # Set required env var
-export ANTHROPIC_API_KEY=sk-ant-...
+export OPENAI_API_KEY=sk-...
 
 # Run demo (7 sample emails, human-readable output)
 python demo.py

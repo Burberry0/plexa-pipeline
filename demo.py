@@ -4,8 +4,8 @@ Processes sample emails through the full pipeline.
 Outputs structured JSON results for the demo UI.
 
 Usage:
-  ANTHROPIC_API_KEY=sk-... python demo.py
-  ANTHROPIC_API_KEY=sk-... python demo.py --json  (machine-readable output)
+  OPENAI_API_KEY=sk-... python demo.py
+  OPENAI_API_KEY=sk-... python demo.py --json  (machine-readable output)
 """
 
 import os
