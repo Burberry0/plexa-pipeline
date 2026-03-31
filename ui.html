@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Plexa Housing — Pipeline</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0c0b09;
+      --panel:    #131210;
+      --border:   #2a2822;
+      --amber:    #e8a020;
+      --amber-dim:#7a5210;
+      --amber-glow: rgba(232,160,32,0.08);
+      --text:     #d4cdc0;
+      --muted:    #5a5448;
+      --lead:     #4ade80;
+      --junk:     #f87171;
+      --t1:       #60a5fa;
+      --t2:       #a78bfa;
+      --t3:       #fb923c;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    /* ── Noise overlay ── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      background-repeat: repeat;
+      background-size: 256px 256px;
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.6;
+    }
+
+    .layout {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      grid-template-columns: 420px 1fr;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 32px;
+      border-bottom: 1px solid var(--border);
+      background: var(--panel);
+    }
+
+    .wordmark {
+      font-family: 'Playfair Display', serif;
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: #f0ece4;
+    }
+
+    .wordmark span {
+      color: var(--amber);
+    }
+
+    .header-meta {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .status-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--muted);
+      display: inline-block;
+      margin-right: 6px;
+      transition: background 0.3s;
+    }
+    .status-dot.live { background: var(--lead); box-shadow: 0 0 6px var(--lead); }
+    .status-dot.error { background: var(--junk); }
+
+    .model-badges {
+      display: flex;
+      gap: 8px;
+    }
+    .badge {
+      padding: 2px 8px;
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      font-size: 10px;
+      color: var(--muted);
+      background: var(--bg);
+    }
+    .badge.filter { border-color: var(--amber-dim); color: var(--amber); }
+
+    /* ── Left Panel ── */
+    .left-panel {
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      background: var(--panel);
+    }
+
+    .panel-section {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .section-label {
+      font-size: 10px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+
+    /* Sample emails */
+    .sample-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .sample-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 9px 12px;
+      color: var(--text);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      cursor: pointer;
+      text-align: left;
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .sample-btn:hover {
+      border-color: var(--amber-dim);
+      background: var(--amber-glow);
+      color: #f0ece4;
+    }
+    .sample-btn.active {
+      border-color: var(--amber);
+      background: var(--amber-glow);
+      color: var(--amber);
+    }
+
+    .sample-tag {
+      font-size: 9px;
+      padding: 1px 5px;
+      border-radius: 2px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      flex-shrink: 0;
+    }
+    .tag-t1 { background: rgba(96,165,250,0.15); color: var(--t1); }
+    .tag-t2 { background: rgba(167,139,250,0.15); color: var(--t2); }
+    .tag-t3 { background: rgba(251,146,60,0.15); color: var(--t3); }
+    .tag-junk { background: rgba(248,113,113,0.15); color: var(--junk); }
+
+    /* Form */
+    .form-group {
+      margin-bottom: 12px;
+    }
+
+    label {
+      display: block;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 5px;
+    }
+
+    input, textarea {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 8px 10px;
+      color: var(--text);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 12px;
+      outline: none;
+      transition: border-color 0.15s;
+      resize: vertical;
+    }
+    input:focus, textarea:focus {
+      border-color: var(--amber-dim);
+    }
+    textarea { min-height: 120px; }
+
+    .run-btn {
+      width: 100%;
+      padding: 12px;
+      background: var(--amber);
+      color: #0c0b09;
+      border: none;
+      border-radius: 3px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      transition: all 0.15s;
+    }
+    .run-btn:hover { background: #f5b030; }
+    .run-btn:disabled {
+      background: var(--amber-dim);
+      cursor: not-allowed;
+      color: #3a2a10;
+    }
+
+    /* ── Right Panel ── */
+    .right-panel {
+      overflow-y: auto;
+      padding: 28px 32px;
+    }
+
+    .idle-state {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      color: var(--muted);
+      text-align: center;
+    }
+    .idle-icon {
+      font-size: 42px;
+      opacity: 0.3;
+      line-height: 1;
+    }
+    .idle-state p { font-size: 12px; }
+
+    /* Pipeline stages */
+    .pipeline-flow {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      margin-bottom: 28px;
+    }
+
+    .stage {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      opacity: 0.25;
+      transition: opacity 0.4s ease;
+    }
+    .stage.active { opacity: 1; }
+    .stage.done { opacity: 0.7; }
+
+    .stage-node {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      background: var(--panel);
+      transition: all 0.3s;
+    }
+    .stage.active .stage-node {
+      border-color: var(--amber);
+      background: var(--amber-glow);
+      box-shadow: 0 0 12px rgba(232,160,32,0.2);
+      animation: pulse 1.2s ease-in-out infinite;
+    }
+    .stage.done .stage-node {
+      border-color: var(--lead);
+      background: rgba(74,222,128,0.08);
+    }
+    .stage.blocked .stage-node {
+      border-color: var(--junk);
+      background: rgba(248,113,113,0.08);
+    }
+    .stage.blocked { opacity: 0.6; }
+
+    .stage-name {
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+    .stage.active .stage-name { color: var(--amber); }
+
+    .stage-connector {
+      height: 1px;
+      width: 20px;
+      background: var(--border);
+      flex-shrink: 0;
+      position: relative;
+      top: -10px;
+    }
+
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 8px rgba(232,160,32,0.2); }
+      50% { box-shadow: 0 0 18px rgba(232,160,32,0.4); }
+    }
+
+    /* Result card */
+    .result-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      margin-bottom: 16px;
+      overflow: hidden;
+      animation: fadeUp 0.35s ease both;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .card-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(255,255,255,0.02);
+    }
+
+    .card-title {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+    }
+
+    .verdict {
+      font-size: 13px;
+      font-weight: 500;
+      padding: 3px 10px;
+      border-radius: 2px;
+    }
+    .verdict.lead { background: rgba(74,222,128,0.12); color: var(--lead); }
+    .verdict.junk { background: rgba(248,113,113,0.12); color: var(--junk); }
+    .verdict.t1   { background: rgba(96,165,250,0.12); color: var(--t1); }
+    .verdict.t2   { background: rgba(167,139,250,0.12); color: var(--t2); }
+    .verdict.t3   { background: rgba(251,146,60,0.12); color: var(--t3); }
+
+    .card-body {
+      padding: 14px 16px;
+    }
+
+    /* Field grid */
+    .field-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px 20px;
+    }
+
+    .field-item { display: flex; flex-direction: column; gap: 2px; }
+
+    .field-key {
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+    }
+
+    .field-val {
+      font-size: 12px;
+      color: var(--text);
+    }
+    .field-val.null { color: var(--muted); font-style: italic; }
+    .field-val.highlight { color: #f0ece4; }
+
+    /* Confidence bar */
+    .confidence-bar {
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      margin-top: 4px;
+      overflow: hidden;
+    }
+    .confidence-fill {
+      height: 100%;
+      background: var(--amber);
+      border-radius: 2px;
+      transition: width 0.6s ease;
+    }
+
+    /* Tier action block */
+    .tier-action {
+      padding: 12px 14px;
+      border-left: 2px solid var(--amber);
+      background: var(--amber-glow);
+      font-size: 11px;
+      color: var(--text);
+      border-radius: 0 3px 3px 0;
+      margin-top: 12px;
+      line-height: 1.7;
+    }
+    .tier-action .action-label {
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--amber);
+      margin-bottom: 4px;
+    }
+    .tier-action.t1 { border-color: var(--t1); background: rgba(96,165,250,0.06); }
+    .tier-action.t1 .action-label { color: var(--t1); }
+    .tier-action.t2 { border-color: var(--t2); background: rgba(167,139,250,0.06); }
+    .tier-action.t2 .action-label { color: var(--t2); }
+    .tier-action.t3 { border-color: var(--t3); background: rgba(251,146,60,0.06); }
+    .tier-action.t3 .action-label { color: var(--t3); }
+
+    /* Stats row */
+    .stats-row {
+      display: flex;
+      gap: 20px;
+      padding: 10px 16px;
+      border-top: 1px solid var(--border);
+      font-size: 10px;
+      color: var(--muted);
+    }
+    .stats-row span { display: flex; gap: 5px; }
+    .stats-row strong { color: var(--text); }
+
+    /* Missing fields */
+    .missing-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 4px;
+    }
+    .missing-tag {
+      padding: 1px 6px;
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      font-size: 10px;
+      color: var(--muted);
+    }
+
+    /* Auto-reply preview */
+    .reply-preview {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 14px;
+      font-size: 11px;
+      color: var(--muted);
+      max-height: 180px;
+      overflow-y: auto;
+      line-height: 1.8;
+    }
+    .reply-preview * { font-family: 'IBM Plex Mono', monospace !important; font-size: 11px !important; }
+
+    /* Error state */
+    .error-card {
+      background: rgba(248,113,113,0.06);
+      border: 1px solid rgba(248,113,113,0.2);
+      border-radius: 4px;
+      padding: 16px;
+      color: var(--junk);
+      font-size: 12px;
+    }
+
+    /* Loading spinner */
+    .spinner {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid var(--border);
+      border-top-color: var(--amber);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Login overlay ── */
+    #loginOverlay {
+      position: fixed; inset: 0;
+      background: var(--bg);
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #loginOverlay.hidden { display: none; }
+
+    .login-box {
+      width: 340px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 36px 32px;
+    }
+
+    .login-wordmark {
+      font-family: 'Playfair Display', serif;
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: #f0ece4;
+      margin-bottom: 4px;
+    }
+    .login-wordmark span { color: var(--amber); }
+
+    .login-sub {
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 28px;
+    }
+
+    .login-field {
+      margin-bottom: 14px;
+    }
+
+    .login-btn {
+      width: 100%;
+      padding: 12px;
+      background: var(--amber);
+      color: #0c0b09;
+      border: none;
+      border-radius: 3px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-top: 8px;
+      transition: background 0.15s;
+    }
+    .login-btn:hover { background: #f5b030; }
+
+    .login-error {
+      margin-top: 12px;
+      font-size: 11px;
+      color: var(--junk);
+      text-align: center;
+      min-height: 16px;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+  </style>
+</head>
+<body>
+
+<!-- Login Overlay -->
+<div id="loginOverlay">
+  <div class="login-box">
+    <div class="login-wordmark">Plexa <span>Housing</span></div>
+    <div class="login-sub">Demo Suite — sign in to continue</div>
+
+    <div class="login-field">
+      <label>Username</label>
+      <input type="text" id="loginUser" placeholder="username" autocomplete="username" />
+    </div>
+    <div class="login-field">
+      <label>Password</label>
+      <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password" />
+    </div>
+
+    <button class="login-btn" onclick="doLogin()">Sign In →</button>
+    <div class="login-error" id="loginError"></div>
+  </div>
+</div>
+
+<div class="layout">
+
+  <!-- Header -->
+  <header>
+    <div class="wordmark">Plexa <span>Housing</span></div>
+    <div class="header-meta">
+      <div>
+        <span class="status-dot" id="statusDot"></span>
+        <span id="statusText">connecting…</span>
+      </div>
+      <div class="model-badges">
+        <span class="badge filter" id="filterBadge">—</span>
+        <span class="badge" id="extractBadge">—</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Left Panel -->
+  <aside class="left-panel">
+
+    <div class="panel-section">
+      <div class="section-label">Sample Emails</div>
+      <div class="sample-list" id="sampleList"></div>
+    </div>
+
+    <div class="panel-section">
+      <div class="section-label">Or write your own</div>
+
+      <div class="form-group">
+        <label>Sender Name</label>
+        <input type="text" id="senderName" placeholder="Jane Smith" />
+      </div>
+      <div class="form-group">
+        <label>Sender Email</label>
+        <input type="email" id="senderEmail" placeholder="jane@example.com" />
+      </div>
+      <div class="form-group">
+        <label>Subject</label>
+        <input type="text" id="subject" placeholder="Looking for a 2BR apartment" />
+      </div>
+      <div class="form-group">
+        <label>Email Body</label>
+        <textarea id="body" placeholder="Hi, I'm looking for a 2 bedroom apartment in Henderson around $1,800/month. I have a small dog. Can I schedule a viewing?"></textarea>
+      </div>
+      <button class="run-btn" id="runBtn" onclick="runPipeline()">Run Pipeline →</button>
+    </div>
+
+  </aside>
+
+  <!-- Right Panel -->
+  <main class="right-panel" id="rightPanel">
+    <div class="idle-state" id="idleState">
+      <div class="idle-icon">◈</div>
+      <p>Select a sample or write an email to run it through the pipeline.</p>
+    </div>
+  </main>
+
+</div>
+
+<script>
+  // ── Auth ──
+  const CREDS = { username: 'plexahousing', password: 'demosuite' };
+
+  function doLogin() {
+    const u = document.getElementById('loginUser').value.trim();
+    const p = document.getElementById('loginPass').value;
+    if (u === CREDS.username && p === CREDS.password) {
+      sessionStorage.setItem('plexaAuth', '1');
+      document.getElementById('loginOverlay').classList.add('hidden');
+    } else {
+      document.getElementById('loginError').textContent = 'Invalid credentials.';
+    }
+  }
+
+  // Allow Enter key on login form
+  ['loginUser', 'loginPass'].forEach(id => {
+    document.getElementById(id).addEventListener('keydown', e => {
+      if (e.key === 'Enter') doLogin();
+    });
+  });
+
+  // Check session on load
+  if (sessionStorage.getItem('plexaAuth') === '1') {
+    document.getElementById('loginOverlay').classList.add('hidden');
+  }
+
+  const API = '';
+
+  const SAMPLES = [
+    {
+      label: 'Tier 1 — Full lead (Henderson)',
+      tag: 't1',
+      sender_name: 'Sarah Johnson',
+      sender_email: 'sarah.j@gmail.com',
+      subject: 'Looking for 2BR apartment',
+      body: `Hi there,\n\nI'm looking for a 2 bedroom apartment in Henderson. My budget is around $1,800/month and I'm looking to move ASAP. I have one small dog.\n\nThere will be 2 of us moving in. Can we schedule a viewing?\n\nThanks,\nSarah`
+    },
+    {
+      label: 'Tier 2 — Gates only (Summerlin)',
+      tag: 't2',
+      sender_name: 'James Chen',
+      sender_email: 'jchen.lv@yahoo.com',
+      subject: '3BR rental in Summerlin?',
+      body: `Do you have any 3 bedroom rentals available in Summerlin? Please let me know what's available.\n\nThanks`
+    },
+    {
+      label: 'Tier 3 — Vague inquiry',
+      tag: 't3',
+      sender_name: 'Mike Torres',
+      sender_email: 'mike.torres@yahoo.com',
+      subject: 'Question',
+      body: `Hey, do you have any places available? I need something soon. Let me know.`
+    },
+    {
+      label: 'Tier 1 — Section 8',
+      tag: 't1',
+      sender_name: 'Linda Williams',
+      sender_email: 'lwilliams88@hotmail.com',
+      subject: 'Studio or 1BR - Section 8',
+      body: `Hello,\n\nI'm looking for a studio or 1 bedroom apartment in the 89102 zip code. My budget is up to $1,200/month. I am on Section 8 housing assistance. I would be the only occupant. No pets. Looking to move ASAP.\n\nPlease let me know if you have anything available.\n\nThank you,\nLinda Williams`
+    },
+    {
+      label: 'Junk — Vendor pitch',
+      tag: 'junk',
+      sender_name: 'Alex from RentTech',
+      sender_email: 'alex@renttech.io',
+      subject: 'Boost your occupancy rates by 30%',
+      body: `Hi there,\n\nI wanted to reach out about RentTech Pro — the #1 property management platform trusted by 5,000+ landlords. Our AI-powered tools can help you fill vacancies faster and reduce tenant turnover by 30%.\n\nWould love to schedule a 15-minute demo this week!\n\nBest,\nAlex`
+    },
+    {
+      label: 'Junk — Out of office',
+      tag: 'junk',
+      sender_name: 'David Park',
+      sender_email: 'david.park@company.com',
+      subject: 'Re: Your inquiry - Out of Office',
+      body: `Thank you for your email. I am currently out of the office and will return on Monday. For urgent matters please contact my colleague at backup@company.com.\n\nThis is an automated message.`
+    },
+  ];
+
+  // Populate samples
+  const list = document.getElementById('sampleList');
+  SAMPLES.forEach((s, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'sample-btn';
+    btn.dataset.index = i;
+    btn.innerHTML = `<span class="sample-tag tag-${s.tag}">${s.tag === 'junk' ? 'JUNK' : s.tag.toUpperCase()}</span>${s.label}`;
+    btn.onclick = () => loadSample(i, btn);
+    list.appendChild(btn);
+  });
+
+  function loadSample(i, btn) {
+    document.querySelectorAll('.sample-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const s = SAMPLES[i];
+    document.getElementById('senderName').value = s.sender_name;
+    document.getElementById('senderEmail').value = s.sender_email;
+    document.getElementById('subject').value = s.subject;
+    document.getElementById('body').value = s.body;
+  }
+
+  // Health check
+  async function checkHealth() {
+    const dot = document.getElementById('statusDot');
+    const txt = document.getElementById('statusText');
+    try {
+      const r = await fetch(`${API}/health`);
+      const d = await r.json();
+      dot.className = 'status-dot live';
+      txt.textContent = 'server online';
+      document.getElementById('filterBadge').textContent = d.models.junk_filter;
+      document.getElementById('extractBadge').textContent = d.models.extraction;
+    } catch {
+      dot.className = 'status-dot error';
+      txt.textContent = 'server offline';
+    }
+  }
+
+  checkHealth();
+
+  // Pipeline stages
+  const STAGES = [
+    { id: 'ingest',   icon: '◉', label: 'Ingest'   },
+    { id: 'filter',   icon: '◈', label: 'Filter'   },
+    { id: 'extract',  icon: '◎', label: 'Extract'  },
+    { id: 'tier',     icon: '◆', label: 'Tier'     },
+    { id: 'route',    icon: '◀', label: 'Route'    },
+  ];
+
+  function buildPipelineFlow() {
+    const flow = document.createElement('div');
+    flow.className = 'pipeline-flow';
+    flow.id = 'pipelineFlow';
+    STAGES.forEach((s, i) => {
+      const stage = document.createElement('div');
+      stage.className = 'stage';
+      stage.id = `stage-${s.id}`;
+      stage.innerHTML = `<div class="stage-node">${s.icon}</div><div class="stage-name">${s.label}</div>`;
+      flow.appendChild(stage);
+      if (i < STAGES.length - 1) {
+        const conn = document.createElement('div');
+        conn.className = 'stage-connector';
+        flow.appendChild(conn);
+      }
+    });
+    return flow;
+  }
+
+  function setStage(id, state) {
+    const el = document.getElementById(`stage-${id}`);
+    if (el) {
+      el.className = `stage ${state}`;
+    }
+  }
+
+  async function animateStages(isLead) {
+    const delay = ms => new Promise(r => setTimeout(r, ms));
+    setStage('ingest', 'active');
+    await delay(350);
+    setStage('ingest', 'done');
+    setStage('filter', 'active');
+    await delay(400);
+    if (!isLead) {
+      setStage('filter', 'blocked');
+      ['extract','tier','route'].forEach(s => setStage(s, 'blocked'));
+      return;
+    }
+    setStage('filter', 'done');
+    setStage('extract', 'active');
+    await delay(500);
+    setStage('extract', 'done');
+    setStage('tier', 'active');
+    await delay(300);
+    setStage('tier', 'done');
+    setStage('route', 'active');
+    await delay(300);
+    setStage('route', 'done');
+  }
+
+  function renderResults(data) {
+    const isLead = data.classification === 'LEAD';
+    const tier = data.tier;
+    const lead = data.extraction;
+
+    const tierColors = { 'Tier 1': 't1', 'Tier 2': 't2', 'Tier 3': 't3' };
+    const tierLabels = { 'Tier 1': 'Tier 1', 'Tier 2': 'Tier 2', 'Tier 3': 'Tier 3' };
+    const tierActions = {
+      'Tier 1': 'Auto-match runs immediately. Full confirmation sent.',
+      'Tier 2': 'Match runs with flag. Soft follow-up question sent.',
+      'Tier 3': 'Lead held. Asking for missing gate fields.',
+    };
+
+    let html = '';
+
+    // Classification card
+    html += `
+      <div class="result-card" style="animation-delay:0.05s">
+        <div class="card-header">
+          <div class="card-title">Classification</div>
+          <div class="verdict ${isLead ? 'lead' : 'junk'}">${isLead ? '✓ LEAD' : '✕ JUNK'}</div>
+        </div>
+        ${!isLead ? `<div class="card-body" style="color:var(--muted);font-size:11px;">Email identified as noise. Pipeline stopped — no extraction performed.</div>` : ''}
+      </div>`;
+
+    if (!isLead) return html;
+
+    // Extraction card
+    const fv = (v, fmt) => {
+      if (v === null || v === undefined) return `<span class="field-val null">—</span>`;
+      if (fmt) return `<span class="field-val highlight">${fmt(v)}</span>`;
+      return `<span class="field-val highlight">${v}</span>`;
+    };
+
+    const budget = (() => {
+      if (!lead) return null;
+      if (lead.budget_min && lead.budget_max) return `$${lead.budget_min.toLocaleString()} – $${lead.budget_max.toLocaleString()}/mo`;
+      if (lead.budget_max) return `up to $${lead.budget_max.toLocaleString()}/mo`;
+      if (lead.budget_min) return `from $${lead.budget_min.toLocaleString()}/mo`;
+      return null;
+    })();
+
+    const conf = lead ? Math.round((lead.confidence || 0) * 100) : 0;
+
+    const missingTags = lead && lead.missing_fields && lead.missing_fields.length
+      ? `<div class="missing-tags">${lead.missing_fields.map(f => `<span class="missing-tag">${f}</span>`).join('')}</div>`
+      : '';
+
+    html += `
+      <div class="result-card" style="animation-delay:0.1s">
+        <div class="card-header">
+          <div class="card-title">Extracted Lead Data</div>
+          <div class="verdict ${tierColors[tier] || ''}">${tierLabels[tier] || tier || '—'}</div>
+        </div>
+        <div class="card-body">
+          <div class="field-grid">
+            <div class="field-item">
+              <div class="field-key">Location</div>
+              ${fv(lead?.location)}
+            </div>
+            <div class="field-item">
+              <div class="field-key">Bedrooms</div>
+              ${fv(lead?.bedrooms !== null && lead?.bedrooms !== undefined ? (lead.bedrooms === 0 ? 'Studio' : `${lead.bedrooms} BR`) : null)}
+            </div>
+            <div class="field-item">
+              <div class="field-key">Budget</div>
+              ${fv(budget)}
+            </div>
+            <div class="field-item">
+              <div class="field-key">Move-in</div>
+              ${fv(lead?.move_in_date)}
+            </div>
+            <div class="field-item">
+              <div class="field-key">Pets</div>
+              ${fv(lead?.pets ? (lead.pets.length === 0 ? 'No pets' : lead.pets.join(', ')) : null)}
+            </div>
+            <div class="field-item">
+              <div class="field-key">Occupants</div>
+              ${fv(lead?.occupants)}
+            </div>
+            <div class="field-item">
+              <div class="field-key">Lease</div>
+              ${fv(lead?.duration_months, v => `${v} mo`)}
+            </div>
+            <div class="field-item">
+              <div class="field-key">Pet-friendly req.</div>
+              ${fv(lead?.pet_friendly_required != null ? (lead.pet_friendly_required ? 'Yes' : 'No') : null)}
+            </div>
+          </div>
+
+          ${lead?.notes ? `<div style="margin-top:10px;padding:8px 10px;border:1px solid var(--border);border-radius:3px;font-size:11px;color:var(--muted)">📝 ${lead.notes}</div>` : ''}
+
+          <div style="margin-top:14px;">
+            <div class="field-key" style="margin-bottom:4px;">Confidence — ${conf}%</div>
+            <div class="confidence-bar"><div class="confidence-fill" style="width:${conf}%"></div></div>
+          </div>
+
+          ${missingTags ? `<div style="margin-top:10px;"><div class="field-key" style="margin-bottom:4px;">Missing fields</div>${missingTags}</div>` : ''}
+
+          ${tier ? `
+            <div class="tier-action ${tierColors[tier] || ''}">
+              <div class="action-label">Routing action</div>
+              ${tierActions[tier] || ''}
+            </div>` : ''}
+        </div>
+        <div class="stats-row">
+          <span>tokens <strong>${(data.tokens?.total || 0).toLocaleString()}</strong></span>
+          <span>confidence <strong>${conf}%</strong></span>
+          <span>status <strong>${data.status || '—'}</strong></span>
+        </div>
+      </div>`;
+
+    // Auto-reply preview
+    if (data.auto_reply_html) {
+      html += `
+        <div class="result-card" style="animation-delay:0.18s">
+          <div class="card-header">
+            <div class="card-title">Auto-reply Preview</div>
+            <div style="font-size:10px;color:var(--muted);">STUB — not sent</div>
+          </div>
+          <div class="card-body">
+            <div class="reply-preview">${data.auto_reply_html}</div>
+          </div>
+        </div>`;
+    }
+
+    return html;
+  }
+
+  async function runPipeline() {
+    const body = document.getElementById('body').value.trim();
+    if (!body) return;
+
+    const payload = {
+      body,
+      sender_name: document.getElementById('senderName').value || 'Demo User',
+      sender_email: document.getElementById('senderEmail').value || 'demo@test.com',
+      subject: document.getElementById('subject').value || 'Rental Inquiry',
+    };
+
+    const btn = document.getElementById('runBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>&nbsp; Processing…';
+
+    const panel = document.getElementById('rightPanel');
+    panel.innerHTML = '';
+
+    const flow = buildPipelineFlow();
+    panel.appendChild(flow);
+
+    // start ingest animation immediately
+    setStage('ingest', 'active');
+
+    try {
+      const res = await fetch(`${API}/demo/classify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      const isLead = data.classification === 'LEAD';
+
+      await animateStages(isLead);
+
+      const resultsDiv = document.createElement('div');
+      resultsDiv.innerHTML = renderResults(data);
+      panel.appendChild(resultsDiv);
+
+    } catch (err) {
+      await animateStages(false);
+      const isNetwork = err instanceof TypeError && err.message.includes('fetch');
+      const errDiv = document.createElement('div');
+      errDiv.innerHTML = isNetwork
+        ? `<div class="error-card">⚠ Cannot reach server.<br/><br/>Make sure it's running: <code>PORT=8080 python server.py</code></div>`
+        : `<div class="error-card">⚠ Render error: ${err.message}</div>`;
+      panel.appendChild(errDiv);
+    }
+
+    btn.disabled = false;
+    btn.textContent = 'Run Pipeline →';
+  }
+
+  // Enter key in textarea
+  document.getElementById('body').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && e.metaKey) runPipeline();
+  });
+</script>
+</body>
+</html>

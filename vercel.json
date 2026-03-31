@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/index.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "ui.html",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    { "src": "/health", "dest": "api/index.py" },
+    { "src": "/ingest", "dest": "api/index.py" },
+    { "src": "/demo/classify", "dest": "api/index.py" },
+    { "src": "/(.*)", "dest": "ui.html" }
+  ]
+}
