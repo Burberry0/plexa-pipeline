@@ -60,7 +60,9 @@ real volume is observed.
 | Service health | GET `https://<vercel-domain>/health` | Non-200, or body `airtable` is false | — |
 | Intake active | n8n REST API, `GET /workflows/<intake-id>` | `active` is false | — |
 
-Outside the business window the freshness check is skipped so that a quiet
+"Local" means the n8n workflow timezone setting, which must be set to the
+Plexa office timezone on both workflows. Outside the business window the
+freshness check is skipped so that a quiet
 weekend does not page anyone. Health and intake-active checks run around the
 clock.
 
