@@ -27,7 +27,9 @@ Expected: `tier: "Tier 1"`, `reply.should_send: false`, `reply.skip_reason: "aut
 
 ## Shadow run (1–2 weeks)
 
-1. Activate the n8n workflow with `AUTO_REPLY_ENABLED=false`.
+1. Activate the n8n workflow with `AUTO_REPLY_ENABLED=false`. Then build the
+   monitor, dead-man's switch, and status interface per `docs/monitoring.md`
+   and run its verification checklist before counting shadow days.
 2. Daily: open the Messages table, filter `Status = Manual Review`, fix root causes.
 3. Twice a week: review 20 random Messages rows against the original email.
    Log any wrong `Classification` or wrong `Tier` into `evals/golden_emails.jsonl`
