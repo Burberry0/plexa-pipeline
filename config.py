@@ -24,8 +24,8 @@ class PipelineConfig:
     extraction_model: str = "gpt-4o"
     junk_filter_max_tokens: int = 50
     extraction_max_tokens: int = 1024
-    openai_timeout_seconds: float = 30.0
-    openai_max_retries: int = 2
+    openai_timeout_seconds: float = 20.0
+    openai_max_retries: int = 1
 
     # Airtable
     airtable_api_key: str = ""
@@ -55,8 +55,8 @@ class PipelineConfig:
             extraction_model=os.getenv("EXTRACTION_MODEL", "gpt-4o"),
             junk_filter_max_tokens=int(os.getenv("JUNK_FILTER_MAX_TOKENS", "50")),
             extraction_max_tokens=int(os.getenv("EXTRACTION_MAX_TOKENS", "1024")),
-            openai_timeout_seconds=float(os.getenv("OPENAI_TIMEOUT_SECONDS", "30")),
-            openai_max_retries=int(os.getenv("OPENAI_MAX_RETRIES", "2")),
+            openai_timeout_seconds=float(os.getenv("OPENAI_TIMEOUT_SECONDS", "20")),
+            openai_max_retries=int(os.getenv("OPENAI_MAX_RETRIES", "1")),
             airtable_api_key=os.getenv("AIRTABLE_API_KEY", ""),
             airtable_base_id=os.getenv("AIRTABLE_BASE_ID", ""),
             airtable_leads_table=os.getenv("AIRTABLE_LEADS_TABLE", "Leads"),

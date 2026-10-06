@@ -9,7 +9,8 @@ def test_sender_name_and_values_are_escaped(make_email):
     assert "<script>" not in html
     assert "&lt;script&gt;alert(1)&lt;/script&gt;" in html
     assert "Hi &lt;b&gt;Bob&lt;/b&gt;," in html
-    assert "a &amp; b" in html
+    assert "a &amp; b" not in html
+    assert "Notes" not in html
     assert "1 &lt;dog&gt;" in html
 
 
@@ -40,3 +41,11 @@ def test_studio_renders_as_studio(make_email):
 
 def test_legacy_renderer_still_works(make_email):
     assert "Plexa Housing" in render_email_for_tier(Tier.TIER_1, make_email(), ExtractedLead(location="x", bedrooms=1, pets=[]))
+
+
+def test_long_values_are_clipped(make_email):
+    _, html = render_reply(Tier.TIER_1, False, make_email(), ExtractedLead(location="x" * 200, bedrooms=2, pets=["y" * 200]))
+    assert "x" * 80 + "\u2026" in html
+    assert "x" * 81 not in html
+    assert "y" * 80 + "\u2026" in html
+    assert "y" * 81 not in html

@@ -9,7 +9,7 @@ vercel env add WEBHOOK_SECRET production        # openssl rand -hex 32
 vercel env add AIRTABLE_API_KEY production
 vercel env add AIRTABLE_BASE_ID production
 vercel env add AUTO_REPLY_ENABLED production    # false until go-live
-vercel env add ALERT_WEBHOOK_URL production     # Slack incoming webhook
+vercel env add ALERT_WEBHOOK_URL production     # Slack incoming webhook; required in production (Manual Review alerts are the only record when Airtable is down)
 vercel env add ALLOWED_ORIGIN production        # https://<your-vercel-domain>
 vercel --prod
 curl https://<your-vercel-domain>/health
@@ -35,6 +35,7 @@ Expected: `tier: "Tier 1"`, `reply.should_send: false`, `reply.skip_reason: "aut
 4. Run `python -m evals.run_eval --min-tier-accuracy 0.9` after each prompt change.
 5. Go-live gate: 7 consecutive days with zero JUNK false negatives in the
    sample and tier accuracy ≥ 0.9 on the golden set.
+6. Sample 20 From addresses in the Messages table. If inquiries arrive via listing-site relay addresses (Zillow, Apartments.com), the one-record-per-sender design and Reply-to-Sender both key on the relay address; raise this with Ryan before go-live.
 
 ## Go-live
 
@@ -57,13 +58,15 @@ continue; no replies are sent. To stop everything, deactivate the n8n workflow.
 | Symptom | Cause | Fix |
 |---|---|---|
 | `/ingest` returns 503 | `WEBHOOK_SECRET` unset on Vercel | add env var, redeploy |
-| `/ingest` returns 401 | n8n header mismatch | compare `PLEXA_WEBHOOK_SECRET` in n8n with Vercel |
+| `/ingest` returns 401 | n8n header mismatch | compare the Header Auth credential value in n8n with Vercel |
 | Many `Manual Review` with `422` in Error | Airtable field name or select option missing | match `docs/airtable-schema.md` exactly |
 | Replies not sent but `should_send: true` | n8n Gmail node error | check n8n execution log |
 | Same sender gets two replies in a minute | Cooldown relies on `Last Reply At`; check the Leads row has it | confirm field type is Date with time |
+| Email labeled Needs Attention / Manual Review in Messages | Airtable or OpenAI failure | fix the cause, then re-run the execution from n8n's execution history (the Gmail trigger will not re-poll it) |
 
 ### Known limitations
 
 - If the Messages log write fails after a successful Leads upsert, an n8n retry of the same message will be reprocessed (dedupe finds no log entry); the cooldown and max-replies cap are the only protection against a second reply.
+- If Vercel kills a function at maxDuration, no Messages row is written and n8n sees a 5xx; n8n's retry reprocesses the message from scratch.
 - Duplicate and JUNK responses carry default `classification: "JUNK"` / `status: "New"` values; n8n must branch on `reply.should_send`, never on `classification`.
 - The service passes the sender's subject through to `reply.subject` unmodified; header-injection safety (CR/LF stripping) is the Gmail node's responsibility.

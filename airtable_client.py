@@ -5,6 +5,7 @@ Thin REST client. Airtable is the only state store for the pipeline.
 
 import json
 import logging
+import time
 from dataclasses import asdict, dataclass
 from typing import Optional
 from urllib.parse import quote
@@ -18,6 +19,8 @@ logger = logging.getLogger("plexa.airtable")
 
 AIRTABLE_API = "https://api.airtable.com/v0"
 REQUEST_TIMEOUT = 15
+RETRY_STATUSES = (429, 503)
+RETRY_DELAY_SECONDS = 1.0
 
 
 @dataclass
@@ -48,6 +51,10 @@ class AirtableClient:
     def _request(self, method: str, table: str, path: str = "", **kwargs) -> dict:
         url = f"{self._base}/{quote(table)}{path}"
         resp = self._session.request(method, url, headers=self._headers, timeout=REQUEST_TIMEOUT, **kwargs)
+        if resp.status_code in RETRY_STATUSES:
+            logger.warning(f"Airtable {resp.status_code} on {method} {table}; retrying once")
+            time.sleep(RETRY_DELAY_SECONDS)
+            resp = self._session.request(method, url, headers=self._headers, timeout=REQUEST_TIMEOUT, **kwargs)
         resp.raise_for_status()
         return resp.json()
 
@@ -62,12 +69,19 @@ class AirtableClient:
         return LeadRecord(records[0]["id"], records[0].get("fields", {}))
 
     def upsert_lead(self, sender_email: str, fields: dict, record_id: Optional[str] = None) -> str:
-        if record_id:
-            data = self._request("PATCH", self._leads, f"/{record_id}", json={"fields": fields, "typecast": True})
-        else:
-            payload = {"fields": {"Email": sender_email.lower(), **fields}, "typecast": True}
-            data = self._request("POST", self._leads, json=payload)
-        return data["id"]
+        """Create or update the sender's Leads row in one call.
+
+        Uses Airtable's performUpsert, merging on Email, so two concurrent
+        requests for the same sender cannot create two rows. `record_id` is
+        ignored (kept so callers don't change); Airtable matches on Email.
+        """
+        payload = {
+            "performUpsert": {"fieldsToMergeOn": ["Email"]},
+            "records": [{"fields": {"Email": sender_email.lower(), **fields}}],
+            "typecast": True,
+        }
+        data = self._request("PATCH", self._leads, json=payload)
+        return data["records"][0]["id"]
 
     # ── Messages ─────────────────────────────────────────────────────────
 

@@ -653,6 +653,7 @@
   const SECRET_KEY = 'plexa_secret';
   function getSecret() { try { return sessionStorage.getItem(SECRET_KEY) || ''; } catch (e) { return ''; } }
   function authHeaders() { return { 'Content-Type': 'application/json', 'X-Webhook-Secret': getSecret() }; }
+  function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
   async function doLogin() {
     const secret = document.getElementById('loginSecret').value.trim();
@@ -856,8 +857,8 @@
     // Extraction card
     const fv = (v, fmt) => {
       if (v === null || v === undefined) return `<span class="field-val null">—</span>`;
-      if (fmt) return `<span class="field-val highlight">${fmt(v)}</span>`;
-      return `<span class="field-val highlight">${v}</span>`;
+      if (fmt) return `<span class="field-val highlight">${esc(fmt(v))}</span>`;
+      return `<span class="field-val highlight">${esc(v)}</span>`;
     };
 
     const budget = (() => {
@@ -871,14 +872,14 @@
     const conf = lead ? Math.round((lead.confidence || 0) * 100) : 0;
 
     const missingTags = lead && lead.missing_fields && lead.missing_fields.length
-      ? `<div class="missing-tags">${lead.missing_fields.map(f => `<span class="missing-tag">${f}</span>`).join('')}</div>`
+      ? `<div class="missing-tags">${lead.missing_fields.map(f => `<span class="missing-tag">${esc(f)}</span>`).join('')}</div>`
       : '';
 
     html += `
       <div class="result-card" style="animation-delay:0.1s">
         <div class="card-header">
           <div class="card-title">Extracted Lead Data</div>
-          <div class="verdict ${tierColors[tier] || ''}">${tierLabels[tier] || tier || '—'}</div>
+          <div class="verdict ${tierColors[tier] || ''}">${esc(tierLabels[tier] || tier || '—')}</div>
         </div>
         <div class="card-body">
           <div class="field-grid">
@@ -916,7 +917,7 @@
             </div>
           </div>
 
-          ${lead?.notes ? `<div style="margin-top:10px;padding:8px 10px;border:1px solid var(--border);border-radius:3px;font-size:11px;color:var(--muted)">📝 ${lead.notes}</div>` : ''}
+          ${lead?.notes ? `<div style="margin-top:10px;padding:8px 10px;border:1px solid var(--border);border-radius:3px;font-size:11px;color:var(--muted)">📝 ${esc(lead.notes)}</div>` : ''}
 
           <div style="margin-top:14px;">
             <div class="field-key" style="margin-bottom:4px;">Confidence — ${conf}%</div>
@@ -934,7 +935,7 @@
         <div class="stats-row">
           <span>tokens <strong>${(data.tokens?.total || 0).toLocaleString()}</strong></span>
           <span>confidence <strong>${conf}%</strong></span>
-          <span>status <strong>${data.status || '—'}</strong></span>
+          <span>status <strong>${esc(data.status || '—')}</strong></span>
         </div>
       </div>`;
 
@@ -1001,7 +1002,7 @@
       const errDiv = document.createElement('div');
       errDiv.innerHTML = isNetwork
         ? `<div class="error-card">⚠ Cannot reach server.<br/><br/>Make sure it's running: <code>PORT=8080 python server.py</code></div>`
-        : `<div class="error-card">⚠ Render error: ${err.message}</div>`;
+        : `<div class="error-card">⚠ Render error: ${esc(err.message)}</div>`;
       panel.appendChild(errDiv);
     }
 

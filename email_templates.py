@@ -42,15 +42,29 @@ def _wrap_body(body_html: str) -> str:
     """
 
 
+MAX_VALUE_CHARS = 80
+
+
+def _clip(text: str) -> str:
+    """Truncate model-copied free text so a prospect-facing reply stays short."""
+    text = str(text)
+    if len(text) <= MAX_VALUE_CHARS:
+        return text
+    return text[:MAX_VALUE_CHARS] + "\u2026"
+
+
 def _recap_table(lead: ExtractedLead) -> str:
-    """Build an HTML table summarizing extracted data. Every value is escaped."""
+    """Build an HTML table summarizing extracted data. Every value is escaped.
+
+    Free-text notes are never shown to the prospect; long values are clipped.
+    """
     rows = []
     fields = [
-        ("Location", lead.location),
+        ("Location", _clip(lead.location) if lead.location else lead.location),
         ("Bedrooms", "Studio" if lead.bedrooms == 0 else lead.bedrooms),
         ("Budget", _format_budget(lead.budget_min, lead.budget_max)),
         ("Move-in Date", lead.move_in_date),
-        ("Pets", ", ".join(lead.pets) if lead.pets else ("None" if lead.pets == [] else None)),
+        ("Pets", ", ".join(_clip(p) for p in lead.pets) if lead.pets else ("None" if lead.pets == [] else None)),
         ("Occupants", lead.occupants),
         ("Lease Duration", f"{lead.duration_months} months" if lead.duration_months else None),
     ]
@@ -60,11 +74,6 @@ def _recap_table(lead: ExtractedLead) -> str:
                 f'<tr><td style="padding:6px 12px; color:#64748b; font-size:13px;">{label}</td>'
                 f'<td style="padding:6px 12px; font-weight:bold; font-size:13px;">{_esc(str(value))}</td></tr>'
             )
-    if lead.notes:
-        rows.append(
-            f'<tr><td style="padding:6px 12px; color:#64748b; font-size:13px;">Notes</td>'
-            f'<td style="padding:6px 12px; font-size:13px;">{_esc(lead.notes)}</td></tr>'
-        )
     return f"""
     <table style="width:100%; border-collapse:collapse; background:#f8fafc; border-radius:6px; margin:16px 0;">
       <thead><tr><td colspan="2" style="padding:10px 12px; font-weight:bold; color:#1a365d; border-bottom:1px solid #e2e8f0;">

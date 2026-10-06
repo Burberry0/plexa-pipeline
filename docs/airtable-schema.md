@@ -5,6 +5,8 @@ writes by name). Single-select options must exist before the first write.
 
 ## Table: Leads (one record per sender email)
 
+The service upserts with `fieldsToMergeOn: ["Email"]`, so Email must stay the primary field and unique.
+
 | Field | Type | Notes |
 |---|---|---|
 | Email | Single line text | **Primary field.** Lowercased sender address. |

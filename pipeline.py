@@ -20,11 +20,20 @@ from airtable_client import (
 from alerts import send_alert
 from config import PipelineConfig
 from email_templates import render_reply
-from guardrails import decide_reply
+from guardrails import ReplyDecision, decide_reply
 from models import Classification, InboundEmail, LeadStatus, PipelineResult, Tier
 from validation import classify_tier, merge_leads, status_for_tier
 
 logger = logging.getLogger("plexa.pipeline")
+
+# Lead statuses the service sets itself. Any other Status on a Leads row
+# (e.g. "Matched") was set by a human and is not overwritten by follow-ups.
+AUTOMATIC_STATUSES = {
+    LeadStatus.NEW.value,
+    LeadStatus.NEEDS_REVIEW.value,
+    LeadStatus.ON_HOLD.value,
+    LeadStatus.MANUAL_REVIEW.value,
+}
 
 
 class Pipeline:
@@ -36,6 +45,11 @@ class Pipeline:
       4. Tier classification + upgrade detection
       5. Reply decision (guardrails) + reply rendering
       6. Airtable upsert (all tiers) + message log
+
+    Auto-replies go out only on first contact or to a sender whose prior tier
+    was Tier 3; any other follow-up is routed to Needs Review for a human.
+    reply_skip_reason values: "ok", "auto_reply_disabled", "max_replies_reached",
+    "cooldown_active", "follow_up", "junk", "duplicate", "pipeline_error".
     """
 
     def __init__(
@@ -105,14 +119,21 @@ class Pipeline:
             # ── 5. Reply decision + render ────────────────────────────
             prior_fields = prior.fields if prior else {}
             reply_count = int(prior_fields.get("Reply Count") or 0)
-            decision = decide_reply(
-                enabled=self.config.auto_reply_enabled,
-                reply_count=reply_count,
-                last_reply_at=prior_fields.get("Last Reply At"),
-                max_replies=self.config.max_auto_replies,
-                cooldown_minutes=self.config.reply_cooldown_minutes,
-                now=now,
-            )
+            is_first_contact = prior is None
+            is_tier3_follow_up = prior_tier == Tier.TIER_3
+            if is_first_contact or is_tier3_follow_up:
+                decision = decide_reply(
+                    enabled=self.config.auto_reply_enabled,
+                    reply_count=reply_count,
+                    last_reply_at=prior_fields.get("Last Reply At"),
+                    max_replies=self.config.max_auto_replies,
+                    cooldown_minutes=self.config.reply_cooldown_minutes,
+                    now=now,
+                )
+            else:
+                # Follow-up from a Tier 1/2 lead: a human answers, not the first-contact template.
+                decision = ReplyDecision(False, "follow_up")
+                result.status = LeadStatus.NEEDS_REVIEW
             result.reply_subject, result.reply_html = render_reply(tier, result.is_upgrade, email, extracted)
             result.should_reply = decision.should_reply
             result.reply_skip_reason = decision.reason
@@ -120,6 +141,9 @@ class Pipeline:
             # ── 6. Upsert ─────────────────────────────────────────────
             if airtable:
                 fields = lead_to_airtable_fields(extracted, tier, result.status, email)
+                prior_status = prior_fields.get("Status")
+                if prior and prior_status and prior_status not in AUTOMATIC_STATUSES and not result.is_upgrade:
+                    fields.pop("Status", None)  # keep a human-set status (e.g. Matched)
                 if decision.should_reply:
                     fields["Reply Count"] = reply_count + 1
                     fields["Last Reply At"] = iso_utc(now)

@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import pytest
 
 from ai_client import ExtractionRefused
+from airtable_client import lead_to_airtable_fields
 from models import Classification, ExtractedLead, LeadStatus, Tier
 from pipeline import Pipeline
 from tests.fakes import FakeAI, FakeAirtable, FakeAlerter
@@ -79,12 +80,15 @@ def test_tier3_then_reply_upgrades_and_merges(base_config, make_email):
     assert at.leads["sarah@example.com"][1]["Reply Count"] == 2
 
 
-def test_guardrails_block_third_reply(base_config, make_email):
+def test_tier3_sender_capped_at_two_replies(base_config, make_email):
     at = FakeAirtable()
-    p = _pipeline(base_config, airtable=at)
-    p.process_email(make_email(message_id="m1"))
+    p = _pipeline(base_config, ai=FakeAI(lead=ExtractedLead(bedrooms=2)), airtable=at)
+    r1 = p.process_email(make_email(message_id="m1"))
+    assert r1.tier == Tier.TIER_3
+    assert r1.should_reply is True
     at.leads["sarah@example.com"][1]["Last Reply At"] = "2026-10-05T11:00:00Z"
-    p.process_email(make_email(message_id="m2"))
+    r2 = p.process_email(make_email(message_id="m2"))
+    assert r2.should_reply is True
     at.leads["sarah@example.com"][1]["Last Reply At"] = "2026-10-05T11:00:00Z"
     r3 = p.process_email(make_email(message_id="m3"))
     assert r3.should_reply is False
@@ -95,10 +99,40 @@ def test_guardrails_block_third_reply(base_config, make_email):
 
 def test_cooldown_blocks_immediate_second_reply(base_config, make_email):
     at = FakeAirtable()
-    p = _pipeline(base_config, airtable=at)
+    p = _pipeline(base_config, ai=FakeAI(lead=ExtractedLead(bedrooms=2)), airtable=at)
     p.process_email(make_email(message_id="m1"))
     r2 = p.process_email(make_email(message_id="m2"))
     assert r2.reply_skip_reason == "cooldown_active"
+
+
+def test_tier1_follow_up_gets_no_reply(base_config, make_email):
+    at = FakeAirtable()
+    p = _pipeline(base_config, airtable=at)
+    r1 = p.process_email(make_email(message_id="m1"))
+    assert r1.tier == Tier.TIER_1
+    assert r1.should_reply is True
+    at.leads["sarah@example.com"][1]["Last Reply At"] = "2026-10-05T11:00:00Z"
+    r2 = p.process_email(make_email(message_id="m2", subject="Re: 2BR please"))
+    assert r2.should_reply is False
+    assert r2.reply_skip_reason == "follow_up"
+    assert r2.status == LeadStatus.NEEDS_REVIEW
+    assert r2.reply_html is not None
+    assert at.leads["sarah@example.com"][1]["Reply Count"] == 1
+
+
+def test_manual_status_survives_follow_up(base_config, make_email):
+    at = FakeAirtable()
+    seeded = lead_to_airtable_fields(
+        ExtractedLead(location="Henderson", bedrooms=2, budget_max=1800.0, confidence=0.9),
+        Tier.TIER_1,
+        LeadStatus.NEW,
+        make_email(message_id="m0"),
+    )
+    seeded["Status"] = "Matched"
+    at.leads["sarah@example.com"] = ("rec1", seeded)
+    r = _pipeline(base_config, airtable=at).process_email(make_email(message_id="m2"))
+    assert r.error is None
+    assert at.leads["sarah@example.com"][1]["Status"] == "Matched"
 
 
 def test_kill_switch(base_config, make_email):

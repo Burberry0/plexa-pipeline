@@ -65,3 +65,20 @@ def test_root_serves_ui(client):
     r = client.get("/")
     assert r.status_code == 200
     assert b"Plexa" in r.data
+
+
+def test_non_ascii_secret_is_401_not_500(client):
+    r = client.post("/ingest", json={"body_plain": "hi", "sender_email": "a@b.com"}, headers={"X-Webhook-Secret": "s\u00e9cret"})
+    assert r.status_code == 401
+
+
+def test_ingest_rejects_list_body(client):
+    r = client.post("/ingest", json=[{"sender_email": "a@b.com"}], headers={"X-Webhook-Secret": "s3cret"})
+    assert r.status_code == 400
+    assert r.get_json() == {"error": "sender_email required"}
+
+
+def test_ingest_requires_sender_email(client):
+    r = client.post("/ingest", json={"body_plain": "hi"}, headers={"X-Webhook-Secret": "s3cret"})
+    assert r.status_code == 400
+    assert r.get_json() == {"error": "sender_email required"}

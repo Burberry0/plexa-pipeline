@@ -61,17 +61,36 @@ def test_find_lead_none_when_empty(cfg):
 
 
 def test_upsert_creates_then_updates(cfg):
-    session = FakeSession([FakeResp(200, {"id": "recNew"}), FakeResp(200, {"id": "recNew"})])
+    session = FakeSession([FakeResp(200, {"records": [{"id": "recNew"}]}), FakeResp(200, {"records": [{"id": "recNew"}]})])
     client = AirtableClient(cfg, session=session)
     assert client.upsert_lead("A@x.com", {"Tier": "Tier 1"}) == "recNew"
     assert client.upsert_lead("A@x.com", {"Tier": "Tier 2"}, record_id="recNew") == "recNew"
-    post = session.calls[0]
-    assert post[0] == "POST"
-    assert post[2]["json"] == {"fields": {"Email": "a@x.com", "Tier": "Tier 1"}, "typecast": True}
-    patch = session.calls[1]
-    assert patch[0] == "PATCH"
-    assert patch[1].endswith("/Leads/recNew")
-    assert patch[2]["json"] == {"fields": {"Tier": "Tier 2"}, "typecast": True}
+    for call, tier in zip(session.calls, ["Tier 1", "Tier 2"]):
+        method, url, kwargs = call
+        assert method == "PATCH"
+        assert url == "https://api.airtable.com/v0/appX/Leads"
+        assert kwargs["json"] == {
+            "performUpsert": {"fieldsToMergeOn": ["Email"]},
+            "records": [{"fields": {"Email": "a@x.com", "Tier": tier}}],
+            "typecast": True,
+        }
+
+
+def test_rate_limit_retries_once_then_succeeds(cfg, monkeypatch):
+    monkeypatch.setattr("airtable_client.time.sleep", lambda s: None)
+    session = FakeSession([FakeResp(429, {}), FakeResp(200, {"records": []})])
+    client = AirtableClient(cfg, session=session)
+    assert client.find_lead("a@x.com") is None
+    assert len(session.calls) == 2
+
+
+def test_rate_limit_twice_raises(cfg, monkeypatch):
+    monkeypatch.setattr("airtable_client.time.sleep", lambda s: None)
+    session = FakeSession([FakeResp(429, {}), FakeResp(429, {})])
+    client = AirtableClient(cfg, session=session)
+    with pytest.raises(requests.HTTPError):
+        client.find_lead("a@x.com")
+    assert len(session.calls) == 2
 
 
 def test_message_exists_and_log(cfg):

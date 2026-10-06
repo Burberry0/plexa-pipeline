@@ -42,11 +42,12 @@ def create_app(config: PipelineConfig, pipeline) -> Flask:
             if not config.has_webhook_secret:
                 return jsonify({"error": "WEBHOOK_SECRET not configured"}), 503
             provided = request.headers.get(SECRET_HEADER, "")
-            if not hmac.compare_digest(provided, config.webhook_secret):
+            if not hmac.compare_digest(provided.encode("utf-8"), config.webhook_secret.encode("utf-8")):
                 return jsonify({"error": "Unauthorized"}), 401
             return fn(*args, **kwargs)
         return wrapper
 
+    # Local dev only: on Vercel, vercel.json routes "/(.*)" to the static ui.html.
     @app.route("/", methods=["GET"])
     def index():
         return send_from_directory(ROOT_DIR, "ui.html")
@@ -76,6 +77,8 @@ def create_app(config: PipelineConfig, pipeline) -> Flask:
         payload = request.get_json(silent=True)
         if not payload:
             return jsonify({"error": "No JSON payload"}), 400
+        if not isinstance(payload, dict) or not payload.get("sender_email"):
+            return jsonify({"error": "sender_email required"}), 400
         email = parse_webhook_payload(payload)
         result = pipeline.process_email(email, persist=True)
         return jsonify(result.to_dict())
