@@ -7,7 +7,7 @@ import re
 import logging
 from abc import ABC, abstractmethod
 from html.parser import HTMLParser
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from models import InboundEmail
@@ -114,7 +114,7 @@ class DirectInputAdapter(EmailIngestionAdapter):
             subject=subject,
             body_html=body_html,
             body_plain=body_plain,
-            received_at=datetime.utcnow(),
+            received_at=datetime.now(timezone.utc),
             thread_id=thread_id,
             is_reply=is_reply,
         )
@@ -143,7 +143,7 @@ def parse_webhook_payload(payload: dict) -> InboundEmail:
         subject=payload.get("subject", "(no subject)"),
         body_html=body_html,
         body_plain=body_plain,
-        received_at=datetime.utcnow(),
+        received_at=datetime.now(timezone.utc),
         thread_id=payload.get("thread_id"),
         message_id=payload.get("message_id"),
         is_reply=payload.get("is_reply", False),

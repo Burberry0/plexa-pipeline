@@ -13,7 +13,7 @@ import sys
 import json
 import logging
 import argparse
-from datetime import datetime
+from datetime import datetime, timezone
 
 from config import PipelineConfig
 from pipeline import Pipeline
@@ -149,7 +149,7 @@ def run_demo(output_json: bool = False):
     print(f"  Processing {len(emails)} sample emails")
     print(f"  Junk filter: {config.junk_filter_model}")
     print(f"  Extraction:  {config.extraction_model}")
-    print(f"  Timestamp:   {datetime.utcnow().isoformat()}Z")
+    print(f"  Timestamp:   {datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}")
     print(f"{'='*70}\n")
 
     # Process
@@ -166,7 +166,7 @@ def run_demo(output_json: bool = False):
         print(f"  Subject: {email.subject}")
         print(f"{'─'*70}")
 
-        result = pipeline.process_email(email)
+        result = pipeline.process_email(email, persist=False)
         result_dict = result.to_dict()
 
         # Track stats
@@ -226,7 +226,7 @@ def run_demo(output_json: bool = False):
     # JSON output
     if output_json:
         output = {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "config": {
                 "junk_filter_model": config.junk_filter_model,
                 "extraction_model": config.extraction_model,
@@ -262,7 +262,7 @@ def run_single(body: str, sender_name: str = "Demo User", sender_email: str = "d
         subject=subject,
         body=body,
     )
-    result = pipeline.process_email(email)
+    result = pipeline.process_email(email, persist=False)
     return result.to_dict()
 
 
