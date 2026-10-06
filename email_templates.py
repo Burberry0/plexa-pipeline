@@ -3,6 +3,8 @@ Plexa Housing — Email Templates
 Tier-specific HTML email renderer.
 """
 
+from html import escape as _esc
+
 from models import InboundEmail, ExtractedLead, Tier
 from validation import get_missing_field_questions
 
@@ -41,7 +43,7 @@ def _wrap_body(body_html: str) -> str:
 
 
 def _recap_table(lead: ExtractedLead) -> str:
-    """Build an HTML table summarizing extracted data."""
+    """Build an HTML table summarizing extracted data. Every value is escaped."""
     rows = []
     fields = [
         ("Location", lead.location),
@@ -56,12 +58,12 @@ def _recap_table(lead: ExtractedLead) -> str:
         if value is not None:
             rows.append(
                 f'<tr><td style="padding:6px 12px; color:#64748b; font-size:13px;">{label}</td>'
-                f'<td style="padding:6px 12px; font-weight:bold; font-size:13px;">{value}</td></tr>'
+                f'<td style="padding:6px 12px; font-weight:bold; font-size:13px;">{_esc(str(value))}</td></tr>'
             )
     if lead.notes:
         rows.append(
             f'<tr><td style="padding:6px 12px; color:#64748b; font-size:13px;">Notes</td>'
-            f'<td style="padding:6px 12px; font-size:13px;">{lead.notes}</td></tr>'
+            f'<td style="padding:6px 12px; font-size:13px;">{_esc(lead.notes)}</td></tr>'
         )
     return f"""
     <table style="width:100%; border-collapse:collapse; background:#f8fafc; border-radius:6px; margin:16px 0;">
@@ -85,7 +87,7 @@ def _format_budget(min_val, max_val):
 
 def _question_list(questions: list) -> str:
     items = "".join(
-        f'<li style="margin:6px 0; color:#334155;">{q}</li>' for q in questions
+        f'<li style="margin:6px 0; color:#334155;">{_esc(q)}</li>' for q in questions
     )
     return f"""
     <div style="background:#fffbeb; border-left:4px solid #f59e0b; padding:12px 16px; margin:16px 0; border-radius:0 6px 6px 0;">
@@ -98,7 +100,7 @@ def _question_list(questions: list) -> str:
 def render_tier1_email(email: InboundEmail, lead: ExtractedLead) -> str:
     """Tier 1 — Full confirmation with recap table."""
     body = f"""
-    <p style="color:#334155; line-height:1.6;">Hi {email.first_name},</p>
+    <p style="color:#334155; line-height:1.6;">Hi {_esc(email.first_name)},</p>
     <p style="color:#334155; line-height:1.6;">
       Thanks for reaching out! We've got everything we need to start looking for the right place for you.
       Here's what we picked up from your message:
@@ -117,7 +119,7 @@ def render_tier2_email(email: InboundEmail, lead: ExtractedLead) -> str:
     """Tier 2 — Match + soft follow-up question."""
     questions = get_missing_field_questions(lead)[:1]  # One soft ask
     body = f"""
-    <p style="color:#334155; line-height:1.6;">Hi {email.first_name},</p>
+    <p style="color:#334155; line-height:1.6;">Hi {_esc(email.first_name)},</p>
     <p style="color:#334155; line-height:1.6;">
       Thanks for your inquiry! We've started looking into options for you based on what you shared:
     </p>
@@ -138,7 +140,7 @@ def render_tier3_email(email: InboundEmail, lead: ExtractedLead) -> str:
         if any(kw in q.lower() for kw in ["area", "bedroom"])
     ]
     body = f"""
-    <p style="color:#334155; line-height:1.6;">Hi {email.first_name},</p>
+    <p style="color:#334155; line-height:1.6;">Hi {_esc(email.first_name)},</p>
     <p style="color:#334155; line-height:1.6;">
       Thanks for reaching out to Plexa Housing! We'd love to help you find the right rental.
     </p>
@@ -157,7 +159,7 @@ def render_tier3_email(email: InboundEmail, lead: ExtractedLead) -> str:
 def render_upgrade_email(email: InboundEmail, lead: ExtractedLead) -> str:
     """Upgrade confirmation — Tier 3 replied with missing data."""
     body = f"""
-    <p style="color:#334155; line-height:1.6;">Hi {email.first_name},</p>
+    <p style="color:#334155; line-height:1.6;">Hi {_esc(email.first_name)},</p>
     <p style="color:#334155; line-height:1.6;">
       Perfect — that's exactly what we needed! Here's your updated search profile:
     </p>
@@ -178,3 +180,24 @@ def render_email_for_tier(tier: Tier, email: InboundEmail, lead: ExtractedLead) 
         return render_tier2_email(email, lead)
     else:
         return render_tier3_email(email, lead)
+
+
+DEFAULT_SUBJECT = "Your rental inquiry — Plexa Housing"
+
+
+def reply_subject(original_subject: str) -> str:
+    subject = (original_subject or "").strip()
+    if not subject:
+        return DEFAULT_SUBJECT
+    if subject.lower().startswith("re:"):
+        return subject
+    return f"Re: {subject}"
+
+
+def render_reply(tier: Tier, is_upgrade: bool, email: InboundEmail, lead: ExtractedLead) -> tuple:
+    """Return (subject, html) for the reply the pipeline decided on."""
+    if is_upgrade:
+        html = render_upgrade_email(email, lead)
+    else:
+        html = render_email_for_tier(tier, email, lead)
+    return reply_subject(email.subject), html
