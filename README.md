@@ -86,3 +86,17 @@ python server.py
 
 ---
 Built by Zautom · Technology & Automation Consulting
+
+## Prompt evals
+
+`evals/golden_emails.jsonl` holds labeled real emails. Add one JSON object per
+line with `id`, `sender_name`, `sender_email`, `subject`, `body`,
+`expected_classification` (`LEAD`/`JUNK`), `expected_tier` (`Tier 1`/`Tier 2`/
+`Tier 3`/`null`), `expected_location` (substring, or `null`) and
+`expected_bedrooms` (integer or `null`). Strip real names and phone numbers.
+
+```bash
+python -m evals.run_eval --min-tier-accuracy 0.9
+```
+
+Run this after any prompt change. Target: 30–50 real emails before go-live.
