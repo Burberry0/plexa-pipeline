@@ -44,7 +44,7 @@ class InboundEmail:
     @property
     def first_name(self) -> str:
         """Extract first name from sender_name. Handles 'First Last' and 'Last, First'."""
-        if not self.sender_name:
+        if not self.sender_name or not self.sender_name.strip():
             return "there"
         name = self.sender_name.strip()
         if "," in name:
