@@ -576,15 +576,11 @@
 <div id="loginOverlay">
   <div class="login-box">
     <div class="login-wordmark">Plexa <span>Housing</span></div>
-    <div class="login-sub">Demo Suite — sign in to continue</div>
+    <div class="login-sub">Demo Suite — enter the API secret to continue</div>
 
     <div class="login-field">
-      <label>Username</label>
-      <input type="text" id="loginUser" placeholder="username" autocomplete="username" />
-    </div>
-    <div class="login-field">
-      <label>Password</label>
-      <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password" />
+      <label>API Secret</label>
+      <input type="password" id="loginSecret" placeholder="paste WEBHOOK_SECRET" autocomplete="current-password" />
     </div>
 
     <button class="login-btn" onclick="doLogin()">Sign In →</button>
@@ -653,32 +649,32 @@
 
 <script>
   // ── Auth ──
-  const CREDS = { username: 'plexahousing', password: 'demosuite' };
+  const API = '';
+  const SECRET_KEY = 'plexa_secret';
+  function getSecret() { try { return sessionStorage.getItem(SECRET_KEY) || ''; } catch (e) { return ''; } }
+  function authHeaders() { return { 'Content-Type': 'application/json', 'X-Webhook-Secret': getSecret() }; }
 
-  function doLogin() {
-    const u = document.getElementById('loginUser').value.trim();
-    const p = document.getElementById('loginPass').value;
-    if (u === CREDS.username && p === CREDS.password) {
-      sessionStorage.setItem('plexaAuth', '1');
-      document.getElementById('loginOverlay').classList.add('hidden');
-    } else {
-      document.getElementById('loginError').textContent = 'Invalid credentials.';
+  async function doLogin() {
+    const secret = document.getElementById('loginSecret').value.trim();
+    const err = document.getElementById('loginError');
+    err.textContent = '';
+    if (!secret) { err.textContent = 'Secret required.'; return; }
+    try {
+      const r = await fetch(`${API}/auth/check`, { headers: { 'X-Webhook-Secret': secret } });
+      if (r.status === 200) {
+        try { sessionStorage.setItem(SECRET_KEY, secret); } catch (e) {}
+        document.getElementById('loginOverlay').classList.add('hidden');
+      } else if (r.status === 503) {
+        err.textContent = 'Server has no WEBHOOK_SECRET configured.';
+      } else {
+        err.textContent = 'Invalid secret.';
+      }
+    } catch (e) {
+      err.textContent = 'Could not reach the API.';
     }
   }
-
-  // Allow Enter key on login form
-  ['loginUser', 'loginPass'].forEach(id => {
-    document.getElementById(id).addEventListener('keydown', e => {
-      if (e.key === 'Enter') doLogin();
-    });
-  });
-
-  // Check session on load
-  if (sessionStorage.getItem('plexaAuth') === '1') {
-    document.getElementById('loginOverlay').classList.add('hidden');
-  }
-
-  const API = '';
+  document.getElementById('loginSecret').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+  if (getSecret()) { fetch(`${API}/auth/check`, { headers: authHeaders() }).then(r => { if (r.ok) document.getElementById('loginOverlay').classList.add('hidden'); }); }
 
   const SAMPLES = [
     {
@@ -986,7 +982,7 @@
     try {
       const res = await fetch(`${API}/demo/classify`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders(),
         body: JSON.stringify(payload),
       });
 
