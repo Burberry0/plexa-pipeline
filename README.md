@@ -7,20 +7,18 @@ Automated junk/lead email classification, structured data extraction, and tier-b
 ## Architecture
 
 ```
-InboundEmail
+InboundEmail (from n8n webhook)
  │
+ ├─ 0. Dedupe on message_id (Airtable Messages)
  ├─ 1. HTML → plaintext strip (ingestion.strip_html)
- │
  ├─ 2. Junk filter [gpt-4o-mini] → LEAD / JUNK
- │    └─ JUNK: stop. No extraction. No Airtable write.
- │
- ├─ 3. AI extraction [gpt-4o] → ExtractedLead (12 fields)
- │
- ├─ 4. Tier classification [validation.py] → Tier 1 / 2 / 3
- │
- ├─ 5. Airtable upsert (Tier 1/2 only)
- │
- └─ 6. Auto-reply (with guardrails: max 2 replies, 5 min cooldown)
+ │    └─ JUNK: stop. Logged to Messages. No extraction.
+ ├─ 3. AI extraction [gpt-4o, strict JSON schema] → ExtractedLead (12 fields)
+ │    └─ Merged over the sender's prior Leads record if one exists
+ ├─ 4. Tier classification [validation.py] → Tier 1 / 2 / 3, upgrade detection
+ ├─ 5. Reply decision [guardrails.py] + rendered reply [email_templates.py]
+ └─ 6. Airtable upsert (all tiers) + Messages log
+       n8n sends the reply when reply.should_send is true.
 ```
 
 ## Quick Start
@@ -51,8 +49,13 @@ python server.py
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/health` | Health check |
+| GET | `/auth/check` | Secret check for the demo UI |
 | POST | `/ingest` | n8n webhook — production email ingestion |
 | POST | `/demo/classify` | Demo — process a single email |
+
+`/ingest` and `/demo/classify` require the `X-Webhook-Secret` header.
+
+See also: [`docs/n8n-workflow.md`](docs/n8n-workflow.md), [`docs/airtable-schema.md`](docs/airtable-schema.md), [`docs/runbook.md`](docs/runbook.md).
 
 ## Modules
 
@@ -61,12 +64,16 @@ python server.py
 | `models.py` | Canonical data shapes: InboundEmail, ExtractedLead, Tier, etc. |
 | `config.py` | Frozen dataclass. All secrets from env vars. |
 | `ingestion.py` | HTML stripping, adapter pattern, webhook parser. |
-| `ai_client.py` | Haiku junk filter + Opus extraction. Anti-hallucination contract. |
+| `ai_client.py` | gpt-4o-mini junk filter + gpt-4o extraction. Anti-hallucination contract. |
 | `validation.py` | Pure Python tier classifier. No I/O. Deterministic. |
 | `pipeline.py` | Orchestrator. Calls every module in sequence. |
 | `email_templates.py` | Tier-specific HTML auto-reply renderer. |
 | `server.py` | Flask API server for webhook mode + demo. |
 | `demo.py` | Demo runner with 7 sample emails. |
+| `airtable_client.py` | Airtable REST client. Leads upsert, Messages log, field mapping. |
+| `guardrails.py` | Reply decision: kill switch, max replies, cooldown. Pure. |
+| `alerts.py` | Slack-compatible webhook alert on pipeline errors. |
+| `evals/` | Golden email set and eval runner. |
 
 ## Tier Classification
 
@@ -84,9 +91,6 @@ python server.py
 | Extraction (gpt-4o) | ~$0.01 | $3.00 |
 | **Total** | | **~$3.20/day (~$96/mo)** |
 
----
-Built by Zautom · Technology & Automation Consulting
-
 ## Prompt evals
 
 `evals/golden_emails.jsonl` holds labeled real emails. Add one JSON object per
@@ -100,3 +104,6 @@ python -m evals.run_eval --min-tier-accuracy 0.9
 ```
 
 Run this after any prompt change. Target: 30–50 real emails before go-live.
+
+---
+Built by Zautom · Technology & Automation Consulting

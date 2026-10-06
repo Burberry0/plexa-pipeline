@@ -30,15 +30,15 @@ This is a **6-step sequential email classification pipeline** for Plexa Housing.
 **Pipeline flow** (`pipeline.py` orchestrates all steps):
 
 ```
-InboundEmail → strip_html → junk filter (gpt-4o-mini) → extract fields (gpt-4o) → classify tier → Airtable upsert → auto-reply
+InboundEmail → strip_html → junk filter (gpt-4o-mini) → extract fields (gpt-4o) → classify tier → reply decision → Airtable upsert + Messages log (n8n sends the reply)
 ```
 
 1. **Ingestion** (`ingestion.py`): HTML → plaintext. Two adapters: `DirectInputAdapter` (demo/API) and `parse_webhook_payload()` (n8n webhook).
 2. **Junk filter** (`ai_client.py`): gpt-4o-mini binary classification — returns `"LEAD"` or `"JUNK"`. JUNK emails exit the pipeline immediately, no extraction performed.
 3. **Extraction** (`ai_client.py`): gpt-4o structured JSON extraction — 12 fields including `location`, `bedrooms`, `budget_min/max`, `move_in_date`, `pets`, `occupants`, `duration_months`. Strict anti-hallucination contract: **null over guess**.
 4. **Tier classification** (`validation.py`): Pure Python, no AI. Gate fields are `location` + `bedrooms`. Tier 1 = gates + ≥1 bonus field; Tier 2 = gates only; Tier 3 = missing a gate field.
-5. **Airtable upsert** (`pipeline.py`): Currently stubbed — logs "Would upsert" for Tier 1/2 leads.
-6. **Auto-reply** (`email_templates.py`): Currently stubbed — renders tier-specific HTML email. Guardrails: max 2 replies per sender, 5-min cooldown.
+5. **Reply decision + Airtable upsert** (`pipeline.py`, `guardrails.py`, `airtable_client.py`): guardrails read `Reply Count` / `Last Reply At` from the sender's Leads record. All tiers are upserted. Every message is logged to the Messages table and used for `message_id` dedupe.
+6. **Reply rendering** (`email_templates.py`): tier-specific HTML, escaped. The service never sends; n8n sends when `reply.should_send` is true. `AUTO_REPLY_ENABLED=false` is the shadow-mode kill switch.
 
 ## Key Design Decisions
 
@@ -52,6 +52,8 @@ InboundEmail → strip_html → junk filter (gpt-4o-mini) → extract fields (gp
 All secrets and tunables come from environment variables. See `.env.example` for the full list. `PipelineConfig` (`config.py`) is a frozen dataclass built via `PipelineConfig.from_env()`.
 
 Key overrideable env vars: `JUNK_FILTER_MODEL`, `EXTRACTION_MODEL`, `MAX_AUTO_REPLIES`, `REPLY_COOLDOWN_MINUTES`, `PORT`.
+
+Also: `WEBHOOK_SECRET` (required, endpoints fail closed without it), `AUTO_REPLY_ENABLED` (defaults to false), `ALERT_WEBHOOK_URL`, `ALLOWED_ORIGIN`.
 
 ## API Endpoints
 
