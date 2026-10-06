@@ -11,10 +11,10 @@ InboundEmail
  │
  ├─ 1. HTML → plaintext strip (ingestion.strip_html)
  │
- ├─ 2. Junk filter [claude-haiku] → LEAD / JUNK
+ ├─ 2. Junk filter [gpt-4o-mini] → LEAD / JUNK
  │    └─ JUNK: stop. No extraction. No Airtable write.
  │
- ├─ 3. AI extraction [claude-opus] → ExtractedLead (12 fields)
+ ├─ 3. AI extraction [gpt-4o] → ExtractedLead (12 fields)
  │
  ├─ 4. Tier classification [validation.py] → Tier 1 / 2 / 3
  │
@@ -30,13 +30,17 @@ InboundEmail
 pip install -r requirements.txt
 
 # Set your API key
-export ANTHROPIC_API_KEY=sk-ant-...
+export OPENAI_API_KEY=sk-...
 
 # Run the demo (7 sample emails)
 python demo.py
 
 # Run with JSON output
 python demo.py --json
+
+# Run tests
+pip install -r requirements-dev.txt
+pytest
 
 # Start the API server
 python server.py
@@ -76,9 +80,9 @@ python server.py
 
 | Component | Cost/Email | Daily (1000 emails, 30% leads) |
 |-----------|-----------|-------------------------------|
-| Junk Filter (Haiku) | ~$0.0001 | $0.10 |
-| Extraction (Opus) | ~$0.015 | $4.50 |
-| **Total** | | **~$4.60/day (~$138/mo)** |
+| Junk Filter (gpt-4o-mini) | ~$0.0002 | $0.20 |
+| Extraction (gpt-4o) | ~$0.01 | $3.00 |
+| **Total** | | **~$3.20/day (~$96/mo)** |
 
 ---
 Built by Zautom · Technology & Automation Consulting
