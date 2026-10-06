@@ -5,7 +5,7 @@ Deterministic function of the ExtractedLead dataclass.
 """
 
 import logging
-from models import ExtractedLead, Tier
+from models import ExtractedLead, LeadStatus, Tier
 
 logger = logging.getLogger("plexa.validation")
 
@@ -102,3 +102,39 @@ def tier_summary(tier: Tier, lead: ExtractedLead) -> dict:
         ]
 
     return summary
+
+
+MERGEABLE_FIELDS = (
+    "location", "bedrooms", "budget_min", "budget_max", "move_in_date",
+    "pets", "occupants", "duration_months", "pet_friendly_required",
+)
+
+
+def merge_leads(prior: ExtractedLead, new: ExtractedLead) -> ExtractedLead:
+    """
+    Merge a new extraction over a prior one for the same sender.
+    New non-null values win (pets=[] is a value). Prior fills gaps.
+    """
+    merged = {}
+    for f in MERGEABLE_FIELDS:
+        new_val = getattr(new, f)
+        merged[f] = new_val if new_val is not None else getattr(prior, f)
+
+    notes = [n for n in (prior.notes, new.notes) if n]
+    notes = list(dict.fromkeys(notes))  # dedupe, keep order
+    missing = [m for m in new.missing_fields if merged.get(m) is None]
+
+    return ExtractedLead(
+        **merged,
+        confidence=max(prior.confidence, new.confidence),
+        missing_fields=missing,
+        notes=" | ".join(notes) if notes else None,
+    )
+
+
+def status_for_tier(tier: Tier) -> LeadStatus:
+    if tier == Tier.TIER_1:
+        return LeadStatus.NEW
+    if tier == Tier.TIER_2:
+        return LeadStatus.NEEDS_REVIEW
+    return LeadStatus.ON_HOLD
