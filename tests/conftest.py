@@ -14,7 +14,11 @@ from models import InboundEmail  # noqa: E402
 
 @pytest.fixture
 def base_config():
-    return PipelineConfig(openai_api_key="test-key")
+    return PipelineConfig(
+        openai_api_key="test-key",
+        webhook_secret="s3cret",
+        auto_reply_enabled=True,
+    )
 
 
 @pytest.fixture

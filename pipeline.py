@@ -35,7 +35,7 @@ class Pipeline:
         self.config = config
         self.ai = AIClient(config)
 
-    def process_email(self, email: InboundEmail) -> PipelineResult:
+    def process_email(self, email: InboundEmail, persist: bool = True) -> PipelineResult:
         """
         Process a single email through the full pipeline.
         Returns PipelineResult with all data populated.
