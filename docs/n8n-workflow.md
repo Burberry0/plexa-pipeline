@@ -36,6 +36,27 @@ Gmail node output):
 
 The function's maxDuration is 60 s (vercel.json). The OpenAI budget is 2 calls × 20 s × 2 attempts = 80 s worst case; typical is under 10 s. Keep the n8n timeout above maxDuration so n8n never retries a call Vercel is still running.
 
+## 3b. Code — "Build log" (parallel branch off node 3)
+Connect node 3's output to this node *and* to node 4; both run on every email.
+Mode: Run Once for All Items. Builds one Slack message per processed email so
+the channel shows how the pipeline evaluated it:
+
+- Duplicates and JUNK: one line each (`:repeat: Duplicate skipped — …`,
+  `:wastebasket: JUNK — …`).
+- Leads: classification, tier, status, sender, subject; then the extracted
+  fields (location, bedrooms, budget range, move-in, pets, occupants,
+  duration), confidence, missing fields, extractor notes; then
+  `Needs attention: YES/no` (with the error text when YES) and
+  `Reply decision: SEND → awaiting approval in Slack` or `skip (<skip_reason>)`.
+
+Reads `$json` (the `/ingest` response) and `$('Build payload').item.json`.
+Returns `{ text }`.
+
+## 3c. HTTP Request — "Slack log"
+- Method: POST, URL: the Slack incoming webhook (`ALERT_WEBHOOK_URL`)
+- Send Body: JSON, Body: `{{ JSON.stringify({ text: $json.text }) }}`
+- End of the logging branch; nothing downstream.
+
 ## 4. IF — "Needs attention?"
 - Condition: String `{{ $json.status }}` equals `Manual Review`
 - True branch → Gmail — Add Label: Operation Add Labels, Message ID
@@ -45,28 +66,67 @@ The function's maxDuration is 60 s (vercel.json). The OpenAI budget is 2 calls �
 
 ## 5. IF — "Should reply?"
 - Condition: Boolean `{{ $json.reply.should_send }}` is true
+- True → node 5a (human approval). False → node 6b.
 
-## 6a. (true) Gmail — Reply
+## 5a. Code — "Build approval"
+Mode: Run Once for All Items. Produces the approval request text: tier,
+sender, subject; the inbound email as plain text (body_plain, or body_html
+with tags stripped), quoted; the proposed reply with tags stripped, quoted.
+Reads `$('POST /ingest').item.json` and `$('Build payload').item.json`.
+Returns `{ text }`.
+
+## 5b. Slack — "Approve reply?" (human in the loop)
+- Credential: a Slack **bot** credential (the incoming webhook cannot wait for
+  a click). Needs `chat:write` in the channel.
+- Resource: Message, Operation: Send and Wait for Response
+- Channel: the alerts channel
+- Message: `{{ $json.text }}`
+- Response Type: Approval; Type of Approval: Approve and Disapprove;
+  labels `Approve & send` / `Decline`
+- Options → Limit Wait Time: 24 hours. The execution pauses here until a
+  button is clicked or the limit passes.
+
+## 5c. IF — "Approved?"
+- Condition: Boolean `{{ $json.data && $json.data.approved === true }}` is true
+- True → node 6a. False (declined or timed out) → node 6c.
+
+## 6a. (approved) Gmail — Reply
 - Resource: Message, Operation: Reply
 - Message ID: `{{ $('Build payload').item.json.message_id }}`
 - Email Type: HTML
-- Message: `{{ $json.reply.html }}`
+- Message: `{{ $('POST /ingest').item.json.reply.html }}`
 - Options: Reply to Sender Only ON. Subject is inherited from the thread; if the
-  node exposes a Subject field, set `{{ $json.reply.subject }}`.
+  node exposes a Subject field, set `{{ $('POST /ingest').item.json.reply.subject }}`.
+- Output → node 6b.
 
-## 6b. (both branches of node 5) Gmail — Add Label
+## 6c. (declined) HTTP Request — "Slack declined"
+- POST to the Slack webhook:
+  `{{ JSON.stringify({ text: ':no_entry: Reply declined (or approval timed out) for ' + $('Build payload').item.json.sender_email + ' — "' + $('Build payload').item.json.subject + '". Nothing sent.' }) }}`
+- Output → node 6b.
+
+## 6b. Gmail — Add Label (reached from 5 false, 6a, and 6c)
 - Operation: Add Labels, Message ID as above, Label: `Plexa/Processed`
 - Do NOT mark as read; leave read state to Ryan.
+
+Known limitation: the service increments the lead's `Reply Count` when it
+*decides* to reply, not when the email is sent. A decline leaves the count one
+high for that sender, which makes `MAX_AUTO_REPLIES` slightly stricter. This
+fails safe and is left as is.
 
 ## Error handling
 Enable the workflow's Error Workflow to post to Slack. The service itself also
 alerts on `ALERT_WEBHOOK_URL` for `Manual Review` outcomes.
 
-## Shadow mode
-With `AUTO_REPLY_ENABLED=false` on the service, every response has
-`reply.should_send = false`, so node 6a never fires. `reply.skip_reason` is
-`auto_reply_disabled` for first-contact and Tier 3 follow-up messages, and
-`follow_up` for Tier 1/2 follow-ups. Leads and Messages are still written to Airtable.
+## Approval gate (replaces shadow mode)
+The service runs with `AUTO_REPLY_ENABLED=true` so it produces real reply
+decisions, and node 5b is the gate: nothing is sent until a human clicks
+`Approve & send` in Slack. Every email is logged to Slack by node 3c regardless.
+
+`AUTO_REPLY_ENABLED=false` remains available as a hard kill switch. With it set,
+every response has `reply.should_send = false`, node 5a–6a never fire, and
+`reply.skip_reason` is `auto_reply_disabled` for first-contact and Tier 3
+follow-up messages, and `follow_up` for Tier 1/2 follow-ups. Leads and Messages
+are still written to Airtable either way.
 
 Possible `reply.skip_reason` values: `auto_reply_disabled`, `max_replies_reached`, `cooldown_active`, `follow_up`, `junk`, `duplicate`, `pipeline_error`.
 `follow_up` means a sender whose Leads row is already Tier 1 or Tier 2 wrote again;

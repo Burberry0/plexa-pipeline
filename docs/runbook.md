@@ -8,7 +8,7 @@ vercel env add OPENAI_API_KEY production
 vercel env add WEBHOOK_SECRET production        # openssl rand -hex 32
 vercel env add AIRTABLE_API_KEY production
 vercel env add AIRTABLE_BASE_ID production
-vercel env add AUTO_REPLY_ENABLED production    # false until go-live
+vercel env add AUTO_REPLY_ENABLED production    # true; n8n's Slack approval step is the gate (see n8n-workflow.md 5b)
 vercel env add ALERT_WEBHOOK_URL production     # Slack incoming webhook; required in production (Manual Review alerts are the only record when Airtable is down)
 vercel env add ALLOWED_ORIGIN production        # https://<your-vercel-domain>
 vercel --prod
@@ -27,9 +27,12 @@ Expected: `tier: "Tier 1"`, `reply.should_send: false`, `reply.skip_reason: "aut
 
 ## Shadow run (1–2 weeks)
 
-1. Activate the n8n workflow with `AUTO_REPLY_ENABLED=false`. Then build the
-   monitor, dead-man's switch, and status interface per `docs/monitoring.md`
-   and run its verification checklist before counting shadow days.
+1. Activate the n8n workflow with `AUTO_REPLY_ENABLED=true`. Replies only go
+   out when someone clicks `Approve & send` on the Slack approval message
+   (n8n-workflow.md node 5b), so the shadow period is "approve nothing you
+   would not have written yourself". Then build the monitor, dead-man's
+   switch, and status interface per `docs/monitoring.md` and run its
+   verification checklist before counting shadow days.
 2. Daily: open the Messages table, filter `Status = Manual Review`, fix root causes.
 3. Twice a week: review 20 random Messages rows against the original email.
    Log any wrong `Classification` or wrong `Tier` into `evals/golden_emails.jsonl`
@@ -41,19 +44,26 @@ Expected: `tier: "Tier 1"`, `reply.should_send: false`, `reply.skip_reason: "aut
 
 ## Go-live
 
-```bash
-vercel env rm AUTO_REPLY_ENABLED production
-vercel env add AUTO_REPLY_ENABLED production    # true
-vercel --prod
-```
+Go-live is a decision about the approval step, not an env var. Once the gate
+in the Shadow run section is met, keep approving in Slack; there is no
+unattended mode in this design. If Ryan later wants fully automatic replies,
+that is a workflow change (bypass nodes 5a–5c) and a new sign-off, not a flag.
 
-Send one real test inquiry from a personal address and confirm the reply lands
-in-thread. Watch `Reply Count` on the Leads row increment to 1.
+To confirm the send path works end to end: send one real test inquiry from a
+personal address, click `Approve & send` on the Slack message, and confirm the
+reply lands in-thread. Watch `Reply Count` on the Leads row increment to 1.
 
 ## Kill switch
 
-Set `AUTO_REPLY_ENABLED=false` and redeploy. Classification and Airtable writes
-continue; no replies are sent. To stop everything, deactivate the n8n workflow.
+Two levels:
+
+- **Soft:** stop clicking Approve. Requests time out after 24 hours and are
+  labeled Processed with a "declined" note in Slack. Nothing is sent.
+- **Hard:** set `AUTO_REPLY_ENABLED=false` and redeploy. The service never
+  decides to reply, so the approval step is never reached. Classification and
+  Airtable writes continue.
+
+To stop everything, deactivate the n8n intake workflow.
 
 ## Common failures
 
