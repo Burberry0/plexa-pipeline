@@ -18,19 +18,20 @@ Twelve nodes: a chain of checks, an alert branch, a digest branch, and a final
 ping. Node names matter: later nodes reference earlier ones with `$('Node name')`.
 
 ### 1. Schedule Trigger
-- Trigger Interval: Minutes
-- Minutes Between Triggers: 30
-- Runs must land on :00 and :30 so the digest gate in node 5 (`minute < 30`)
-  is reliable. If the next-execution preview shows other minutes, switch to
-  Custom (Cron) with `0,30 * * * *`.
+- Trigger Interval: Custom (Cron), expression `0,30 * * * *`
+- Runs land on :00 and :30, which is what makes the digest gate in node 5
+  (`hour === 8 && minute < 30`) fire exactly once a day.
 
 ### 2. Airtable — "Newest message"
 - Credential: the same personal access token as the service
 - Operation: Search
 - Base / Table: `AIRTABLE_BASE_ID` / Messages
-- Options → Sort: field `Processed At`, direction Descending
-- Options → Limit: 1
-- Settings → Always Output Data: ON (an empty table must not stop the run)
+- Filter By Formula: `IS_AFTER({Processed At}, DATEADD(NOW(), -2, 'days'))`
+- Return All: ON (bounded by two days of email volume)
+- Sort: field `Processed At`, direction Descending
+- Settings → Always Output Data: ON (an empty result must not stop the run)
+- The Evaluate node takes the maximum `Processed At` across the returned rows,
+  so the freshness check is correct even if the sort option is ignored.
 
 ### 3. HTTP Request — "Health check"
 - Method: GET
@@ -66,11 +67,11 @@ const alerts = [];
 // writes succeed. This freshness check is the only signal for a real
 // Airtable outage. Do not weaken it on the assumption /health covers it.
 const inWindow = now.weekday <= 5 && now.hour >= WINDOW_START && now.hour < WINDOW_END;
-const newest = $('Newest message').first().json;
-const processedAt = newest && newest['Processed At'];
+const rows = $('Newest message').all().map(i => i.json).filter(r => r && r['Processed At']);
+const processedAt = rows.length ? rows.map(r => r['Processed At']).sort().slice(-1)[0] : null;
 if (inWindow) {
   if (!processedAt) {
-    alerts.push('No rows in Messages table at all.');
+    alerts.push('No email processed in the last 48 h.');
   } else {
     const ageHours = now.diff(DateTime.fromISO(processedAt), 'hours').hours;
     if (ageHours > STALE_HOURS) {
@@ -102,6 +103,7 @@ return [{
     alerts,
     hasAlerts: alerts.length > 0,
     digestTime,
+    lastProcessedAt: processedAt,
     tz: now.zoneName,
     checkedAt: now.toISO(),
   },
