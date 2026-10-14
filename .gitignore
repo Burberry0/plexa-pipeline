@@ -5,3 +5,7 @@ __pycache__/
 .DS_Store
 .claude/
 .superpowers/
+demo_results.json
+.pytest_cache/
+.vercel
+.env*

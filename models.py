@@ -6,7 +6,7 @@ All data shapes used across the pipeline.
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class Tier(Enum):
@@ -36,7 +36,7 @@ class InboundEmail:
     subject: str
     body_html: str
     body_plain: str  # stripped plaintext
-    received_at: datetime = field(default_factory=datetime.utcnow)
+    received_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     thread_id: Optional[str] = None
     message_id: Optional[str] = None
     is_reply: bool = False
@@ -44,7 +44,7 @@ class InboundEmail:
     @property
     def first_name(self) -> str:
         """Extract first name from sender_name. Handles 'First Last' and 'Last, First'."""
-        if not self.sender_name:
+        if not self.sender_name or not self.sender_name.strip():
             return "there"
         name = self.sender_name.strip()
         if "," in name:
@@ -55,7 +55,7 @@ class InboundEmail:
 
 @dataclass
 class ExtractedLead:
-    """Structured data extracted from a lead email by GPT-4o."""
+    """Structured data extracted from a lead email by the extraction model."""
     location: Optional[str] = None
     bedrooms: Optional[int] = None
     budget_min: Optional[float] = None
@@ -111,8 +111,13 @@ class PipelineResult:
     extracted: Optional[ExtractedLead] = None
     tier: Optional[Tier] = None
     status: LeadStatus = LeadStatus.NEW
-    auto_reply_sent: bool = False
     is_upgrade: bool = False
+    is_duplicate: bool = False
+    airtable_record_id: Optional[str] = None
+    reply_subject: Optional[str] = None
+    reply_html: Optional[str] = None
+    should_reply: bool = False
+    reply_skip_reason: Optional[str] = None
     error: Optional[str] = None
     processing_time_ms: float = 0.0
 
@@ -124,17 +129,30 @@ class PipelineResult:
     def is_lead(self) -> bool:
         return self.classification == Classification.LEAD
 
+    @property
+    def total_tokens(self) -> int:
+        return self.junk_filter_tokens + self.extraction_tokens
+
     def to_dict(self) -> dict:
         """Serialize for API/demo output."""
         result = {
             "sender": f"{self.email.sender_name} <{self.email.sender_email}>",
             "subject": self.email.subject,
+            "email": {
+                "sender_email": self.email.sender_email,
+                "sender_name": self.email.sender_name,
+                "subject": self.email.subject,
+                "message_id": self.email.message_id,
+                "thread_id": self.email.thread_id,
+            },
             "classification": self.classification.value,
+            "is_duplicate": self.is_duplicate,
+            "is_upgrade": self.is_upgrade,
             "processing_time_ms": round(self.processing_time_ms, 1),
             "tokens": {
                 "junk_filter": self.junk_filter_tokens,
                 "extraction": self.extraction_tokens,
-                "total": self.junk_filter_tokens + self.extraction_tokens,
+                "total": self.total_tokens,
             },
         }
         if self.extracted:
@@ -155,7 +173,14 @@ class PipelineResult:
         if self.tier:
             result["tier"] = self.tier.value
         result["status"] = self.status.value
-        result["auto_reply_sent"] = self.auto_reply_sent
+        result["reply"] = {
+            "should_send": self.should_reply,
+            "skip_reason": self.reply_skip_reason,
+            "subject": self.reply_subject,
+            "html": self.reply_html,
+        }
+        if self.airtable_record_id:
+            result["airtable_record_id"] = self.airtable_record_id
         if self.error:
             result["error"] = self.error
         return result

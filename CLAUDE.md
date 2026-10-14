@@ -2,63 +2,74 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Branch state
+
+Production work lives on `worktree-production-readiness`. `main` still holds the Phase 1 prototype (no tests, Airtable and replies stubbed). Work on the production branch; its docs and this file describe that branch.
+
 ## Commands
 
 ```bash
-# Install dependencies
-pip install -r requirements.txt
+pip install -r requirements.txt -r requirements-dev.txt
 
-# Set required env var
-export OPENAI_API_KEY=sk-...
+# Unit tests: no network, AI and Airtable are injected fakes (tests/fakes.py)
+pytest
+pytest tests/test_pipeline.py -k follow_up        # one test by name
 
-# Run demo (7 sample emails, human-readable output)
-python demo.py
-
-# Run demo with JSON output
+# Real model calls, nothing persisted. Keys are read from the environment or the nearest .env.
+# OPENCODE_API_KEY selects OpenCode Go; with only OPENAI_API_KEY the service uses api.openai.com.
+python demo.py            # 7 sample emails, human-readable
 python demo.py --json
+python -m evals.run_eval --min-tier-accuracy 0.9   # golden set in evals/golden_emails.jsonl; run after any prompt or model change
+python -m evals.run_eval --junk-model glm-5.3-flash --extraction-model mimo-v2.6-flash   # compare models
 
-# Start Flask API server (port 5000)
-python server.py
+# Local server (endpoints return 503 without WEBHOOK_SECRET)
+WEBHOOK_SECRET=dev python server.py               # FLASK_DEBUG=1 for the debugger
+
+# Deploy (project is linked; env vars live on Vercel, see docs/runbook.md)
+vercel --prod && curl https://<domain>/health
 ```
 
-No test suite exists — testing is done via `demo.py` or by POSTing to the running server.
+## What this service is
 
-## Architecture
+A stateless decision engine for Plexa Housing's rental-inquiry inbox: one email in, one `PipelineResult` out. It never sends email and never writes to disk.
 
-This is a **6-step sequential email classification pipeline** for Plexa Housing. It processes inbound rental inquiry emails, filters junk, extracts structured lead data, and routes leads into a 3-tier system.
+- **n8n owns Gmail.** It polls the inbox, POSTs each message to `/ingest`, posts the proposed reply to Slack for a human to approve, and sends it. See `docs/n8n-workflow.md` and `docs/monitoring.md`.
+- **Airtable owns state.** Two tables, documented field-by-field in `docs/airtable-schema.md`. `Leads` is one row per sender (merged on `Email` via `performUpsert`, so concurrent requests cannot create duplicates). `Messages` is one row per processed message, keyed on `Message ID`, and is the dedupe and audit log. Field names in `airtable_client.py` must match that doc exactly; a mismatch surfaces as a 422 and a `Manual Review` row.
 
-**Pipeline flow** (`pipeline.py` orchestrates all steps):
+## Pipeline flow (`pipeline.py`)
 
 ```
-InboundEmail → strip_html → junk filter (Haiku) → extract fields (Opus) → classify tier → Airtable upsert → auto-reply
+dedupe on message_id → junk filter → extraction → merge over prior Leads row
+→ tier + upgrade detection → reply decision + render → Leads upsert + Messages log
 ```
 
-1. **Ingestion** (`ingestion.py`): HTML → plaintext. Two adapters: `DirectInputAdapter` (demo/API) and `parse_webhook_payload()` (n8n webhook).
-2. **Junk filter** (`ai_client.py`): Claude Haiku binary classification — returns `"LEAD"` or `"JUNK"`. JUNK emails exit the pipeline immediately, no extraction performed.
-3. **Extraction** (`ai_client.py`): Claude Opus structured JSON extraction — 12 fields including `location`, `bedrooms`, `budget_min/max`, `move_in_date`, `pets`, `occupants`, `duration_months`. Strict anti-hallucination contract: **null over guess**.
-4. **Tier classification** (`validation.py`): Pure Python, no AI. Gate fields are `location` + `bedrooms`. Tier 1 = gates + ≥1 bonus field; Tier 2 = gates only; Tier 3 = missing a gate field.
-5. **Airtable upsert** (`pipeline.py`): Currently stubbed — logs "Would upsert" for Tier 1/2 leads.
-6. **Auto-reply** (`email_templates.py`): Currently stubbed — renders tier-specific HTML email. Guardrails: max 2 replies per sender, 5-min cooldown.
+Rules that span several files and are easy to break:
 
-## Key Design Decisions
+- **AI provider** (`config.py`, `ai_client.py`): one OpenAI SDK client, built by `build_openai_client()`, pointed at OpenCode Go when `OPENCODE_API_KEY` is set and at OpenAI otherwise. Only OpenCode models served on `/chat/completions` work (MiMo, GLM, DeepSeek, Kimi, LongCat); Claude, Qwen, GPT Luna and Grok use other endpoints. Every call sends `x-opencode-session` (the message ID) and a custom User-Agent, which OpenCode's usage policy asks for. Production models are `glm-5.3-flash` for both roles; see the README table for what else was tested and why it failed.
+- **Junk filter** (`ai_client.py`): only a response starting with `JUNK` is junk; anything else, including empty, is `LEAD`. False negatives lose customers.
+- **Extraction** (`ai_client.py`): strict `json_schema` output against `EXTRACTION_JSON_SCHEMA` by default; `EXTRACTION_RESPONSE_FORMAT=json_object|none` for providers that lack it. `coerce_extraction()` then forces types. Reasoning models count thinking against `max_tokens`, so the defaults are 512 for the one-word junk filter and 4096 for extraction; too low and the model returns empty content (which the junk filter treats as LEAD, with a warning). Contract is null over guess. Today's date is passed in the user message so relative dates resolve. Prompts live in the `PROMPTS` registry with version strings; bump the version and `last_updated` on any change (a test pins the current versions).
+- **Merge and upgrade** (`validation.py`): a returning sender's new extraction is merged over the stored `Extraction JSON` (new non-null wins, `pets=[]` is a value), then re-tiered. `is_upgrade` is true only when the prior tier was Tier 3 and the new one is not.
+- **Tiers** (`validation.py`): gate fields are `location` and `bedrooms`. Tier 1 = both gates plus one bonus field, Tier 2 = gates only, Tier 3 = a gate missing. Pure Python, no AI.
+- **Reply decision** (`guardrails.py`, applied in `pipeline.py`): the service only proposes a reply on first contact or on a follow-up from a Tier 3 sender. Any other follow-up gets `skip_reason: follow_up` and status `Needs Review` for a human. Then the kill switch (`AUTO_REPLY_ENABLED`), max replies, and cooldown apply, read from the Leads row. The service increments `Reply Count` and `Last Reply At` when it decides to reply even though n8n does the sending.
+- **Human-set status wins.** A `Status` not in `AUTOMATIC_STATUSES` (for example `Matched`) is not overwritten by a follow-up unless it is an upgrade.
+- **Errors never raise.** Any exception sets `status: Manual Review`, `skip_reason: pipeline_error`, posts to `ALERT_WEBHOOK_URL`, and the Messages row is still written in `finally`. Duplicates and JUNK return default `classification`/`status` values, so n8n must branch on `reply.should_send`, never on `classification`.
 
-- **Two-model strategy**: Haiku (~$0.0001/email) for junk triage, Opus (~$0.015/email) for extraction. Haiku tiebreaker is "when in doubt, choose LEAD" — false negatives (missing a real lead) are worse than false positives.
-- **`PipelineResult`** (`models.py`) is the canonical output object — carries classification, extracted lead, tier, status, token counts, and optional error. Errors set `status=MANUAL_REVIEW` and don't raise.
-- **Prompt registry**: All prompts live in the `PROMPTS` dict in `ai_client.py`, not inline, for version control.
-- **`validate_extraction()`** in `validation.py` is a pure function that checks the Opus JSON output against the 12-field schema before tier classification runs.
+## Testing seams
+
+`Pipeline(config, ai=, airtable=, alerter=, now=)` and `AIClient(config, client=)` accept injected doubles; `tests/fakes.py` has `FakeAI`, `FakeAirtable`, `FakeAlerter`. `process_email(email, persist=False)` runs the full chain without Airtable, which is what `/demo/classify`, `demo.py`, and the eval runner use. `PipelineConfig` is a frozen dataclass; build it directly in tests rather than through env vars.
+
+## Server and deployment
+
+`server.py` is an app factory (`create_app(config, pipeline)`); the module-level `app` is what `api/index.py` exports as `handler` for Vercel. `/ingest`, `/demo/classify`, and `/auth/check` require `X-Webhook-Secret` compared with `hmac.compare_digest`, and return 503 when `WEBHOOK_SECRET` is unset. CORS is only enabled when `ALLOWED_ORIGIN` is set.
+
+`vercel.json` routes each API path explicitly and sends everything else to the static `ui.html`. A new endpoint must be added to `vercel.json` or it will serve the UI instead. Function `maxDuration` is 60 s; the AI timeout and retry settings in `config.py` are sized so two calls fit inside it, and n8n's HTTP timeout must stay above it.
 
 ## Configuration
 
-All secrets and tunables come from environment variables. See `.env.example` for the full list. `PipelineConfig` (`config.py`) is a frozen dataclass built via `PipelineConfig.from_env()`.
+Everything comes from env vars through `PipelineConfig.from_env()`, which also loads the nearest `.env` (real env vars win; pass `load_env_file=False` in tests). `.env.example` is the full list. Secret fields are excluded from the dataclass repr, so a logged config never prints keys. `AUTO_REPLY_ENABLED` defaults to false. In production it is true and the Slack approval step in n8n is the gate; setting it false is the hard kill switch (classification and Airtable writes continue). `.env*` and `.vercel/` are gitignored.
 
-Key overrideable env vars: `JUNK_FILTER_MODEL`, `EXTRACTION_MODEL`, `MAX_AUTO_REPLIES`, `REPLY_COOLDOWN_MINUTES`, `PORT`.
+## Docs
 
-## API Endpoints
-
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | `/health` | Health check |
-| POST | `/ingest` | n8n webhook (production) |
-| POST | `/demo/classify` | Single-email test |
-
-All responses are `PipelineResult.to_dict()` JSON.
+- `docs/runbook.md`: deploy, smoke test, shadow run, go-live gate, kill switch, failure table.
+- `docs/n8n-workflow.md`, `docs/monitoring.md`: node-by-node n8n specs; node names are referenced by other nodes, so renaming one breaks the workflow.
+- `docs/superpowers/specs/` and `docs/superpowers/plans/`: the design decisions and the task-by-task plans this branch implemented.

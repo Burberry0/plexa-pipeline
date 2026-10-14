@@ -4,8 +4,8 @@ Processes sample emails through the full pipeline.
 Outputs structured JSON results for the demo UI.
 
 Usage:
-  OPENAI_API_KEY=sk-... python demo.py
-  OPENAI_API_KEY=sk-... python demo.py --json  (machine-readable output)
+  python demo.py            # AI key from env or .env (OPENCODE_API_KEY or OPENAI_API_KEY)
+  python demo.py --json     # machine-readable output
 """
 
 import os
@@ -13,7 +13,7 @@ import sys
 import json
 import logging
 import argparse
-from datetime import datetime
+from datetime import datetime, timezone
 
 from config import PipelineConfig
 from pipeline import Pipeline
@@ -125,9 +125,9 @@ def run_demo(output_json: bool = False):
 
     # Config
     config = PipelineConfig.from_env()
-    if not config.has_openai_key:
-        print("ERROR: OPENAI_API_KEY environment variable not set.")
-        print("Usage: OPENAI_API_KEY=sk-... python demo.py")
+    if not config.has_ai_key:
+        print("ERROR: set OPENCODE_API_KEY (OpenCode Go) or OPENAI_API_KEY in the environment or .env.")
+        print("Usage: python demo.py")
         sys.exit(1)
 
     # Initialize
@@ -149,7 +149,7 @@ def run_demo(output_json: bool = False):
     print(f"  Processing {len(emails)} sample emails")
     print(f"  Junk filter: {config.junk_filter_model}")
     print(f"  Extraction:  {config.extraction_model}")
-    print(f"  Timestamp:   {datetime.utcnow().isoformat()}Z")
+    print(f"  Timestamp:   {datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}")
     print(f"{'='*70}\n")
 
     # Process
@@ -166,7 +166,7 @@ def run_demo(output_json: bool = False):
         print(f"  Subject: {email.subject}")
         print(f"{'─'*70}")
 
-        result = pipeline.process_email(email)
+        result = pipeline.process_email(email, persist=False)
         result_dict = result.to_dict()
 
         # Track stats
@@ -226,7 +226,7 @@ def run_demo(output_json: bool = False):
     # JSON output
     if output_json:
         output = {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "config": {
                 "junk_filter_model": config.junk_filter_model,
                 "extraction_model": config.extraction_model,
@@ -251,8 +251,8 @@ def run_demo(output_json: bool = False):
 def run_single(body: str, sender_name: str = "Demo User", sender_email: str = "demo@test.com", subject: str = "Rental inquiry"):
     """Run a single email through the pipeline. For API/interactive use."""
     config = PipelineConfig.from_env()
-    if not config.has_openai_key:
-        raise ValueError("OPENAI_API_KEY not set")
+    if not config.has_ai_key:
+        raise ValueError("OPENCODE_API_KEY or OPENAI_API_KEY not set")
 
     pipeline = Pipeline(config)
     adapter = DirectInputAdapter()
@@ -262,7 +262,7 @@ def run_single(body: str, sender_name: str = "Demo User", sender_email: str = "d
         subject=subject,
         body=body,
     )
-    result = pipeline.process_email(email)
+    result = pipeline.process_email(email, persist=False)
     return result.to_dict()
 
 
