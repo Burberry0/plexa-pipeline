@@ -11,6 +11,7 @@ from ai_client import (
     PROMPTS,
     coerce_extraction,
 )
+from config import PipelineConfig
 from models import Classification
 
 
@@ -46,6 +47,13 @@ def test_classify_only_junk_on_explicit_junk(base_config, make_email):
     assert AIClient(base_config, client=FakeOpenAI("LEAD")).classify_email(make_email())[0] == Classification.LEAD
     assert AIClient(base_config, client=FakeOpenAI("NOT A LEAD")).classify_email(make_email())[0] == Classification.LEAD
     assert AIClient(base_config, client=FakeOpenAI("")).classify_email(make_email())[0] == Classification.LEAD
+
+
+def test_classify_warns_on_empty_content(base_config, make_email, caplog):
+    with caplog.at_level("WARNING", logger="plexa.ai_client"):
+        cls, _ = AIClient(base_config, client=FakeOpenAI("")).classify_email(make_email())
+    assert cls == Classification.LEAD
+    assert any("empty" in rec.message.lower() and "max_tokens" in rec.message for rec in caplog.records)
 
 
 def test_extract_uses_structured_outputs_and_today(base_config, make_email):
@@ -104,3 +112,55 @@ def test_prompt_versions_bumped():
     assert PROMPTS["extraction"]["version"] == "1.1.0"
     assert PROMPTS["junk_filter"]["version"] == "1.1.0"
     assert "2026-06-15" not in PROMPTS["extraction"]["system_prompt"]
+
+
+# ── Provider wiring ─────────────────────────────────────────────────────────
+
+from ai_client import build_openai_client  # noqa: E402
+from config import OPENCODE_DEFAULT_BASE_URL  # noqa: E402
+
+
+def test_build_client_points_at_opencode_with_user_agent():
+    cfg = PipelineConfig(opencode_api_key="oc-key", ai_user_agent="plexa-pipeline/1.0")
+    client = build_openai_client(cfg)
+    assert str(client.base_url).rstrip("/") == OPENCODE_DEFAULT_BASE_URL
+    assert client._custom_headers["User-Agent"] == "plexa-pipeline/1.0"
+    assert client.api_key == "oc-key"
+
+
+def test_build_client_defaults_to_openai_without_opencode_key():
+    client = build_openai_client(PipelineConfig(openai_api_key="sk-x"))
+    assert "api.openai.com" in str(client.base_url)
+    assert client.api_key == "sk-x"
+
+
+def test_calls_send_message_id_as_opencode_session(base_config, make_email):
+    fake = FakeOpenAI("LEAD")
+    AIClient(base_config, client=fake).classify_email(make_email(message_id="msg-42"))
+    assert fake.chat.completions.last_kwargs["extra_headers"]["x-opencode-session"] == "msg-42"
+
+    fake = FakeOpenAI(json.dumps(FULL))
+    AIClient(base_config, client=fake).extract_lead(make_email(message_id="msg-43"))
+    assert fake.chat.completions.last_kwargs["extra_headers"]["x-opencode-session"] == "msg-43"
+
+
+def test_calls_without_message_id_still_send_a_session(base_config, make_email):
+    fake = FakeOpenAI("LEAD")
+    AIClient(base_config, client=fake).classify_email(make_email(message_id=None))
+    assert fake.chat.completions.last_kwargs["extra_headers"]["x-opencode-session"]
+
+
+def test_extract_json_object_mode(make_email):
+    cfg = PipelineConfig(openai_api_key="k", extraction_response_format="json_object")
+    fake = FakeOpenAI(json.dumps(FULL))
+    lead, _ = AIClient(cfg, client=fake).extract_lead(make_email())
+    assert fake.chat.completions.last_kwargs["response_format"] == {"type": "json_object"}
+    assert lead.bedrooms == 2
+
+
+def test_extract_none_mode_omits_response_format(make_email):
+    cfg = PipelineConfig(openai_api_key="k", extraction_response_format="none")
+    fake = FakeOpenAI("```json\n" + json.dumps(FULL) + "\n```")
+    lead, _ = AIClient(cfg, client=fake).extract_lead(make_email())
+    assert "response_format" not in fake.chat.completions.last_kwargs
+    assert lead.location == "Henderson"

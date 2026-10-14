@@ -4,8 +4,8 @@ Processes sample emails through the full pipeline.
 Outputs structured JSON results for the demo UI.
 
 Usage:
-  OPENAI_API_KEY=sk-... python demo.py
-  OPENAI_API_KEY=sk-... python demo.py --json  (machine-readable output)
+  python demo.py            # AI key from env or .env (OPENCODE_API_KEY or OPENAI_API_KEY)
+  python demo.py --json     # machine-readable output
 """
 
 import os
@@ -125,9 +125,9 @@ def run_demo(output_json: bool = False):
 
     # Config
     config = PipelineConfig.from_env()
-    if not config.has_openai_key:
-        print("ERROR: OPENAI_API_KEY environment variable not set.")
-        print("Usage: OPENAI_API_KEY=sk-... python demo.py")
+    if not config.has_ai_key:
+        print("ERROR: set OPENCODE_API_KEY (OpenCode Go) or OPENAI_API_KEY in the environment or .env.")
+        print("Usage: python demo.py")
         sys.exit(1)
 
     # Initialize
@@ -251,8 +251,8 @@ def run_demo(output_json: bool = False):
 def run_single(body: str, sender_name: str = "Demo User", sender_email: str = "demo@test.com", subject: str = "Rental inquiry"):
     """Run a single email through the pipeline. For API/interactive use."""
     config = PipelineConfig.from_env()
-    if not config.has_openai_key:
-        raise ValueError("OPENAI_API_KEY not set")
+    if not config.has_ai_key:
+        raise ValueError("OPENCODE_API_KEY or OPENAI_API_KEY not set")
 
     pipeline = Pipeline(config)
     adapter = DirectInputAdapter()

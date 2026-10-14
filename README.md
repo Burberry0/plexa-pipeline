@@ -11,9 +11,9 @@ InboundEmail (from n8n webhook)
  │
  ├─ 0. Dedupe on message_id (Airtable Messages)
  ├─ 1. HTML → plaintext strip (ingestion.strip_html)
- ├─ 2. Junk filter [gpt-4o-mini] → LEAD / JUNK
+ ├─ 2. Junk filter [glm-5.3-flash via OpenCode Go] → LEAD / JUNK
  │    └─ JUNK: stop. Logged to Messages. No extraction.
- ├─ 3. AI extraction [gpt-4o, strict JSON schema] → ExtractedLead (12 fields)
+ ├─ 3. AI extraction [glm-5.3-flash, strict JSON schema] → ExtractedLead (12 fields)
  │    └─ Merged over the sender's prior Leads record if one exists
  ├─ 4. Tier classification [validation.py] → Tier 1 / 2 / 3, upgrade detection
  ├─ 5. Reply decision [guardrails.py] + rendered reply [email_templates.py]
@@ -27,8 +27,10 @@ InboundEmail (from n8n webhook)
 # Install dependencies
 pip install -r requirements.txt
 
-# Set your API key
-export OPENAI_API_KEY=sk-...
+# Set your API key (or put it in .env). OPENCODE_API_KEY selects OpenCode Go;
+# OPENAI_API_KEY alone falls back to api.openai.com with gpt-4o models.
+export OPENCODE_API_KEY=...
+export JUNK_FILTER_MODEL=glm-5.3-flash EXTRACTION_MODEL=glm-5.3-flash
 
 # Run the demo (7 sample emails)
 python demo.py
@@ -64,7 +66,7 @@ See also: [`docs/n8n-workflow.md`](docs/n8n-workflow.md), [`docs/airtable-schema
 | `models.py` | Canonical data shapes: InboundEmail, ExtractedLead, Tier, etc. |
 | `config.py` | Frozen dataclass. All secrets from env vars. |
 | `ingestion.py` | HTML stripping, adapter pattern, webhook parser. |
-| `ai_client.py` | gpt-4o-mini junk filter + gpt-4o extraction. Anti-hallucination contract. |
+| `ai_client.py` | Junk filter + structured extraction over the OpenAI chat protocol (OpenCode Go or OpenAI). Anti-hallucination contract. |
 | `validation.py` | Pure Python tier classifier. No I/O. Deterministic. |
 | `pipeline.py` | Orchestrator. Calls every module in sequence. |
 | `email_templates.py` | Tier-specific HTML auto-reply renderer. |
@@ -83,13 +85,25 @@ See also: [`docs/n8n-workflow.md`](docs/n8n-workflow.md), [`docs/airtable-schema
 | **Tier 2** | Location + Bedrooms only | Match + soft follow-up |
 | **Tier 3** | Missing location or bedrooms | Hold — ask for missing info |
 
-## Cost Projection
+## AI provider and cost
 
-| Component | Cost/Email | Daily (1000 emails, 30% leads) |
-|-----------|-----------|-------------------------------|
-| Junk Filter (gpt-4o-mini) | ~$0.0002 | $0.20 |
-| Extraction (gpt-4o) | ~$0.01 | $3.00 |
-| **Total** | | **~$3.20/day (~$96/mo)** |
+Production runs on an OpenCode Go subscription (flat $10/month, Go Plus $40)
+through its OpenAI-compatible endpoint. Usage is capped per model in monthly
+dollar terms with 5-hour and weekly windows; check the OpenCode console if
+`Manual Review` rows show 429s. Only models served on OpenCode's
+`/chat/completions` endpoint work (GLM, Kimi, DeepSeek, MiMo, LongCat).
+
+Golden-set results on 2026-10-13 (`python -m evals.run_eval`):
+
+| Model (both roles) | Classification | Tier | Notes |
+|---|---|---|---|
+| `glm-5.3-flash` | 7/7, 7/7 | 7/7, 7/7 | **Production.** Reasoning model: needs the default caps (`JUNK_FILTER_MAX_TOKENS=512`, `EXTRACTION_MAX_TOKENS=4096`) or output comes back empty. Leads take 3–20 s for both calls. Largest documented Go cap ($60/mo). |
+| `mimo-v2.6-flash` | 7/7 | 7/7 on one run | Correct when it answers, but extraction exceeded the 20 s timeout in 2 of 3 runs. Fallback only. |
+| `deepseek-v4-pro`, `deepseek-v4.1-flash` | — | — | Rejected until "Global regions" is enabled in the OpenCode workspace privacy settings. |
+| `kimi-k2.7-code` | — | — | Rejects `temperature` other than 1; not supported by this client. |
+| `glm-5.3` | — | — | Returned malformed or empty JSON. |
+
+Without `OPENCODE_API_KEY` the service falls back to OpenAI (`gpt-4o-mini` / `gpt-4o`, roughly $0.01 per lead).
 
 ## Prompt evals
 

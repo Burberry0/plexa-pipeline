@@ -4,7 +4,12 @@
 
 ```bash
 vercel link
-vercel env add OPENAI_API_KEY production
+vercel env add OPENCODE_API_KEY production --sensitive   # OpenCode Go key; selects the OpenCode provider
+vercel env add JUNK_FILTER_MODEL production      # glm-5.3-flash
+vercel env add EXTRACTION_MODEL production       # glm-5.3-flash
+vercel env add EXTRACTION_RESPONSE_FORMAT production   # json_schema (verified on glm-5.3-flash and mimo-v2.6-flash)
+# Lead emails take 3–20 s for the two calls. Worst case with the defaults (20 s timeout, 1 retry) is 80 s,
+# above the 60 s function limit; n8n retries the whole message, so OPENAI_MAX_RETRIES=0 is a safe way to stay under it.
 vercel env add WEBHOOK_SECRET production        # openssl rand -hex 32
 vercel env add AIRTABLE_API_KEY production
 vercel env add AIRTABLE_BASE_ID production
@@ -15,7 +20,7 @@ vercel --prod
 curl https://<your-vercel-domain>/health
 ```
 
-`/health` must show `"airtable": true`. Then:
+`/health` must show `"airtable": true` and `"ai": {"provider": "opencode", ...}`. Then:
 
 ```bash
 curl -X POST https://<your-vercel-domain>/ingest \
@@ -74,7 +79,14 @@ To stop everything, deactivate the n8n intake workflow.
 | Many `Manual Review` with `422` in Error | Airtable field name or select option missing | match `docs/airtable-schema.md` exactly |
 | Replies not sent but `should_send: true` | n8n Gmail node error | check n8n execution log |
 | Same sender gets two replies in a minute | Cooldown relies on `Last Reply At`; check the Leads row has it | confirm field type is Date with time |
-| Email labeled Needs Attention / Manual Review in Messages | Airtable or OpenAI failure | fix the cause, then re-run the execution from n8n's execution history (the Gmail trigger will not re-poll it) |
+| Email labeled Needs Attention / Manual Review in Messages | Airtable or AI provider failure | fix the cause, then re-run the execution from n8n's execution history (the Gmail trigger will not re-poll it) |
+| Error `This Go model requires Global regions` | Model is region-restricted on OpenCode | enable Global regions in the OpenCode workspace privacy settings, or pick another model |
+| Error `Model returned empty extraction` on long emails | Reasoning model exhausted `max_tokens` while thinking | raise `EXTRACTION_MAX_TOKENS` (default 4096) |
+| Many leads where every email is classified LEAD, warning `Junk filter returned empty content` in logs | Same cause on the one-word classifier | raise `JUNK_FILTER_MAX_TOKENS` (default 512) |
+| `Request timed out` in Error | Model slower than `OPENAI_TIMEOUT_SECONDS` (seen on mimo-v2.6-flash) | switch to `glm-5.3-flash` or raise the timeout within the 60 s function limit |
+| Error `invalid temperature` | Model only accepts `temperature=1` (Kimi) | pick another model; the client pins temperature 0 |
+| 429 from the AI provider | OpenCode 5-hour / weekly / monthly dollar cap hit for that model | wait for the window, upgrade to Go Plus, or switch model |
+| `/health` shows `"provider": "openai"` in production | `OPENCODE_API_KEY` missing on Vercel | add it and redeploy; until then calls go to OpenAI with the OpenAI model names |
 
 ### Known limitations
 

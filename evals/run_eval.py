@@ -1,17 +1,20 @@
 """
 Plexa Housing — Prompt eval runner
-Runs the golden set through the real pipeline (OpenAI calls, no Airtable)
+Runs the golden set through the real pipeline (live model calls, no Airtable)
 and reports classification / tier / gate-field accuracy.
 
 Usage:
-  OPENAI_API_KEY=sk-... python -m evals.run_eval
+  python -m evals.run_eval                      # provider/models from env (.env is loaded)
   python -m evals.run_eval --file evals/golden_emails.jsonl --min-tier-accuracy 0.9
+  python -m evals.run_eval --junk-model glm-5.3-flash --extraction-model deepseek-v4-pro
 """
 
 import argparse
+import dataclasses
 import json
 import os
 import sys
+from typing import Optional
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
@@ -57,6 +60,19 @@ def score_case(case: dict, result: PipelineResult) -> dict:
     }
 
 
+def format_line(score: dict, result: PipelineResult) -> str:
+    """One console line per case. A pipeline error is shown so it cannot hide behind a default JUNK."""
+    flag = "OK " if all(v for k, v in score.items() if k != "id") else "BAD"
+    tier = result.tier.value if result.tier else "-"
+    loc = result.extracted.location if result.extracted else "-"
+    br = result.extracted.bedrooms if result.extracted else "-"
+    line = (f"{flag} {score['id']:<24} cls={result.classification.value:<4} tier={tier:<7} "
+            f"loc={loc} br={br} ms={result.processing_time_ms:.0f}")
+    if result.error:
+        line += f" err={result.error}"
+    return line
+
+
 def summarize(scores: list) -> dict:
     total = len(scores)
 
@@ -73,16 +89,30 @@ def summarize(scores: list) -> dict:
     }
 
 
+def apply_model_overrides(config: PipelineConfig, junk_model: Optional[str], extraction_model: Optional[str]) -> PipelineConfig:
+    """Return a config with the given models swapped in; None keeps the configured one."""
+    changes = {}
+    if junk_model:
+        changes["junk_filter_model"] = junk_model
+    if extraction_model:
+        changes["extraction_model"] = extraction_model
+    return dataclasses.replace(config, **changes) if changes else config
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--file", default=os.path.join(os.path.dirname(__file__), "golden_emails.jsonl"))
     parser.add_argument("--min-tier-accuracy", type=float, default=0.0)
+    parser.add_argument("--junk-model", help="override JUNK_FILTER_MODEL for this run")
+    parser.add_argument("--extraction-model", help="override EXTRACTION_MODEL for this run")
     args = parser.parse_args()
 
-    config = PipelineConfig.from_env()
-    if not config.has_openai_key:
-        print("OPENAI_API_KEY not set", file=sys.stderr)
+    config = apply_model_overrides(PipelineConfig.from_env(), args.junk_model, args.extraction_model)
+    if not config.has_ai_key:
+        print("Set OPENCODE_API_KEY or OPENAI_API_KEY", file=sys.stderr)
         return 2
+    print(f"provider={config.ai_provider} junk_filter={config.junk_filter_model} "
+          f"extraction={config.extraction_model} response_format={config.extraction_response_format}")
 
     pipeline = Pipeline(config, airtable=None)
     adapter = DirectInputAdapter()
@@ -97,9 +127,7 @@ def main() -> int:
         result = pipeline.process_email(email, persist=False)
         s = score_case(case, result)
         scores.append(s)
-        flag = "OK " if all(v for k, v in s.items() if k != "id") else "BAD"
-        print(f"{flag} {s['id']:<24} cls={result.classification.value:<4} tier={result.tier.value if result.tier else '-':<7} "
-              f"loc={result.extracted.location if result.extracted else '-'} br={result.extracted.bedrooms if result.extracted else '-'}")
+        print(format_line(s, result))
 
     summary = summarize(scores)
     print(json.dumps(summary, indent=2))

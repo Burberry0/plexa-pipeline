@@ -40,3 +40,29 @@ def test_summarize():
     assert s["classification_accuracy"] == 1.0
     assert s["tier_accuracy"] == 0.5
     assert s["failures"] == ["b"]
+
+
+def test_model_overrides_replace_only_given_models():
+    from config import PipelineConfig
+    from evals.run_eval import apply_model_overrides
+
+    base = PipelineConfig(openai_api_key="k", junk_filter_model="a", extraction_model="b")
+    cfg = apply_model_overrides(base, junk_model=None, extraction_model="deepseek-v4-pro")
+    assert cfg.junk_filter_model == "a"
+    assert cfg.extraction_model == "deepseek-v4-pro"
+    assert apply_model_overrides(base, "glm-5.3-flash", None).junk_filter_model == "glm-5.3-flash"
+
+
+def test_format_line_shows_pipeline_error():
+    from evals.run_eval import format_line
+
+    ok = _result(Classification.LEAD, Tier.TIER_1, "Henderson", 2)
+    line = format_line({"id": "x", "classification_ok": True, "tier_ok": True, "location_ok": True, "bedrooms_ok": True}, ok)
+    assert line.startswith("OK ") and "err=" not in line
+    ok.processing_time_ms = 1234.5
+    assert "ms=1234" in format_line({"id": "x", "classification_ok": True, "tier_ok": True, "location_ok": True, "bedrooms_ok": True}, ok)
+
+    bad = _result(Classification.LEAD)
+    bad.error = "Model returned empty extraction"
+    line = format_line({"id": "y", "classification_ok": True, "tier_ok": False, "location_ok": False, "bedrooms_ok": False}, bad)
+    assert line.startswith("BAD") and "err=Model returned empty extraction" in line

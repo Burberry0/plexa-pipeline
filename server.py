@@ -3,7 +3,7 @@ Plexa Housing — API Server
 Flask server for webhook ingestion + demo API.
 
 Usage:
-  OPENAI_API_KEY=sk-... WEBHOOK_SECRET=... python server.py
+  WEBHOOK_SECRET=... python server.py   # AI key from env or .env (OPENCODE_API_KEY or OPENAI_API_KEY)
 """
 
 import hmac
@@ -57,6 +57,7 @@ def create_app(config: PipelineConfig, pipeline) -> Flask:
         return jsonify({
             "status": "ok",
             "timestamp": datetime.now(timezone.utc).isoformat(),
+            "ai": {"provider": config.ai_provider, "base_url": config.ai_base_url},
             "models": {
                 "junk_filter": config.junk_filter_model,
                 "extraction": config.extraction_model,
@@ -113,6 +114,6 @@ app = create_app(config, Pipeline(config))
 
 if __name__ == "__main__":
     print(f"\n  Plexa Housing API Server on port {config.port}")
-    print(f"  Junk filter: {config.junk_filter_model} | Extraction: {config.extraction_model}")
+    print(f"  AI: {config.ai_provider} | Junk filter: {config.junk_filter_model} | Extraction: {config.extraction_model}")
     print(f"  Airtable: {'configured' if config.has_airtable_config else 'off'} | Auto-reply: {config.auto_reply_enabled}\n")
     app.run(host="0.0.0.0", port=config.port, debug=os.getenv("FLASK_DEBUG") == "1")

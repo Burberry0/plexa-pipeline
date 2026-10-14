@@ -40,8 +40,8 @@ class Pipeline:
     """
     Processes a single email:
       1. Dedupe on message_id (Airtable Messages)
-      2. Junk filter (gpt-4o-mini)
-      3. Extraction (gpt-4o), merged over the sender's prior record if any
+      2. Junk filter (cheap chat model)
+      3. Extraction (strict JSON schema), merged over the sender's prior record if any
       4. Tier classification + upgrade detection
       5. Reply decision (guardrails) + reply rendering
       6. Airtable upsert (all tiers) + message log

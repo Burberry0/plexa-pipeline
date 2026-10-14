@@ -1,12 +1,14 @@
 """
 Plexa Housing — AI Client
-Two GPT calls: cheap junk filter (gpt-4o-mini) then structured extraction (gpt-4o).
-Anti-hallucination contract enforced here.
+Two chat-completions calls: a cheap junk filter, then structured extraction.
+Speaks the OpenAI protocol to either api.openai.com or OpenCode Go
+(selected by PipelineConfig.ai_provider). Anti-hallucination contract enforced here.
 """
 
 import json
 import logging
 import time
+import uuid
 from datetime import date
 from typing import Optional, Tuple
 
@@ -252,19 +254,47 @@ def _strip_fences(text: str) -> str:
 
 # ── Client ──────────────────────────────────────────────────────────────────
 
+def build_openai_client(config: PipelineConfig) -> OpenAI:
+    """OpenAI SDK client for the configured provider.
+
+    OpenCode asks clients to identify with their own User-Agent, so it is set
+    for every provider; api.openai.com ignores it.
+    """
+    return OpenAI(
+        api_key=config.ai_api_key,
+        base_url=config.ai_base_url,
+        default_headers={"User-Agent": config.ai_user_agent},
+        timeout=config.openai_timeout_seconds,
+        max_retries=config.openai_max_retries,
+    )
+
+
+def _session_headers(email: InboundEmail) -> dict:
+    """OpenCode routes and caches per `x-opencode-session`; one email is one session."""
+    return {"x-opencode-session": email.message_id or uuid.uuid4().hex}
+
+
+def _extraction_response_format(mode: str) -> Optional[dict]:
+    if mode == "json_schema":
+        return {
+            "type": "json_schema",
+            "json_schema": {"name": "rental_lead", "strict": True, "schema": EXTRACTION_JSON_SCHEMA},
+        }
+    if mode == "json_object":
+        return {"type": "json_object"}
+    return None
+
+
 class AIClient:
-    """Handles all OpenAI API interactions for the Plexa pipeline."""
+    """Handles all chat-completions interactions for the Plexa pipeline."""
 
     def __init__(self, config: PipelineConfig, client=None):
         self.config = config
-        self.client = client or OpenAI(
-            api_key=config.openai_api_key,
-            timeout=config.openai_timeout_seconds,
-            max_retries=config.openai_max_retries,
-        )
+        self.client = client or build_openai_client(config)
         logger.info(
-            f"AIClient initialized | junk_filter={config.junk_filter_model} "
-            f"| extraction={config.extraction_model}"
+            f"AIClient initialized | provider={config.ai_provider} "
+            f"| junk_filter={config.junk_filter_model} | extraction={config.extraction_model} "
+            f"| response_format={config.extraction_response_format}"
         )
 
     def classify_email(self, email: InboundEmail) -> Tuple[Classification, int]:
@@ -285,12 +315,18 @@ class AIClient:
                 {"role": "system", "content": PROMPTS["junk_filter"]["system_prompt"]},
                 {"role": "user", "content": user_message},
             ],
+            extra_headers=_session_headers(email),
         )
         elapsed_ms = (time.time() - start) * 1000
 
         raw = (response.choices[0].message.content or "").strip().upper()
         tokens = (response.usage.prompt_tokens or 0) + (response.usage.completion_tokens or 0)
 
+        if not raw:
+            logger.warning(
+                "Junk filter returned empty content; treating as LEAD. If the model reasons before "
+                "answering, JUNK_FILTER_MAX_TOKENS (max_tokens) may be too low."
+            )
         classification = Classification.JUNK if raw.startswith("JUNK") else Classification.LEAD
         logger.info(
             f"Junk filter: {classification.value} | raw='{raw}' | {elapsed_ms:.0f}ms | "
@@ -309,24 +345,22 @@ class AIClient:
             body=email.body_plain[:5000],
         )
 
-        start = time.time()
-        response = self.client.chat.completions.create(
+        kwargs = dict(
             model=self.config.extraction_model,
             max_tokens=self.config.extraction_max_tokens,
             temperature=0.0,
-            response_format={
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "rental_lead",
-                    "strict": True,
-                    "schema": EXTRACTION_JSON_SCHEMA,
-                },
-            },
             messages=[
                 {"role": "system", "content": PROMPTS["extraction"]["system_prompt"]},
                 {"role": "user", "content": user_message},
             ],
+            extra_headers=_session_headers(email),
         )
+        response_format = _extraction_response_format(self.config.extraction_response_format)
+        if response_format is not None:
+            kwargs["response_format"] = response_format
+
+        start = time.time()
+        response = self.client.chat.completions.create(**kwargs)
         elapsed_ms = (time.time() - start) * 1000
         tokens = (response.usage.prompt_tokens or 0) + (response.usage.completion_tokens or 0)
 

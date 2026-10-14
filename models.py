@@ -55,7 +55,7 @@ class InboundEmail:
 
 @dataclass
 class ExtractedLead:
-    """Structured data extracted from a lead email by GPT-4o."""
+    """Structured data extracted from a lead email by the extraction model."""
     location: Optional[str] = None
     bedrooms: Optional[int] = None
     budget_min: Optional[float] = None

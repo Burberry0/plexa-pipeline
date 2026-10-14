@@ -7,3 +7,5 @@ __pycache__/
 .superpowers/
 demo_results.json
 .pytest_cache/
+.vercel
+.env*

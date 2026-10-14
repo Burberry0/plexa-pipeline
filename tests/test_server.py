@@ -82,3 +82,13 @@ def test_ingest_requires_sender_email(client):
     r = client.post("/ingest", json={"body_plain": "hi"}, headers={"X-Webhook-Secret": "s3cret"})
     assert r.status_code == 400
     assert r.get_json() == {"error": "sender_email required"}
+
+
+def test_health_reports_ai_provider_and_host():
+    cfg = PipelineConfig(opencode_api_key="oc", webhook_secret="s")
+    app = create_app(cfg, FakePipeline())
+    body = app.test_client().get("/health").get_json()
+    assert body["ai"] == {"provider": "opencode", "base_url": "https://opencode.ai/inference/go/v1"}
+
+    body = create_app(PipelineConfig(openai_api_key="k"), FakePipeline()).test_client().get("/health").get_json()
+    assert body["ai"] == {"provider": "openai", "base_url": None}

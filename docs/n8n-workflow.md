@@ -34,7 +34,7 @@ Gmail node output):
   Retries are normally safe: the service dedupes on `message_id`. See the runbook's Known limitations for the one gap (a failed Messages-log write).
 - Options: Batching: Items per Batch = 1, Batch Interval = 200 ms — requests from one Gmail poll run sequentially so a second message from the same sender sees the first one's Leads row and hits the cooldown.
 
-The function's maxDuration is 60 s (vercel.json). The OpenAI budget is 2 calls × 20 s × 2 attempts = 80 s worst case; typical is under 10 s. Keep the n8n timeout above maxDuration so n8n never retries a call Vercel is still running.
+The function's maxDuration is 60 s (vercel.json). The AI call budget is 2 calls × 20 s × 2 attempts = 80 s worst case; typical is under 10 s. Keep the n8n timeout above maxDuration so n8n never retries a call Vercel is still running.
 
 ## 3b. Code — "Build log" (parallel branch off node 3)
 Connect node 3's output to this node *and* to node 4; both run on every email.
