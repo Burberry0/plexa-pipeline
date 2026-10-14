@@ -21,6 +21,7 @@ from alerts import send_alert
 from config import PipelineConfig
 from email_templates import render_reply
 from guardrails import ReplyDecision, decide_reply
+from match_request import build_match_request
 from models import Classification, InboundEmail, LeadStatus, PipelineResult, Tier
 from validation import classify_tier, merge_leads, status_for_tier
 
@@ -42,12 +43,17 @@ class Pipeline:
       1. Dedupe on message_id (Airtable Messages)
       2. Junk filter (cheap chat model)
       3. Extraction (strict JSON schema), merged over the sender's prior record if any
-      4. Tier classification + upgrade detection
+      4. Tier classification + upgrade detection; a match-ready lead (all gate
+         fields) also gets a JotForm-shaped `match_request` for n8n to POST to
+         the property-matching workflow once a human approves in Slack
       5. Reply decision (guardrails) + reply rendering
       6. Airtable upsert (all tiers) + message log
 
-    Auto-replies go out only on first contact or to a sender whose prior tier
-    was Tier 3; any other follow-up is routed to Needs Review for a human.
+    The prior tier is the *effective* one: the stored extraction re-classified
+    under the current gate, falling back to the Tier column only when the
+    extraction is missing. Auto-replies go out only on first contact or to a
+    sender whose effective prior tier was Tier 3; any other follow-up is routed
+    to Needs Review for a human.
     reply_skip_reason values: "ok", "auto_reply_disabled", "max_replies_reached",
     "cooldown_active", "follow_up", "junk", "duplicate", "pipeline_error".
     """
@@ -101,7 +107,12 @@ class Pipeline:
 
             prior = airtable.find_lead(email.sender_email) if airtable else None
             prior_lead = lead_from_record(prior) if prior else None
-            prior_tier = tier_from_record(prior) if prior else None
+            # Effective prior tier: re-tier the stored extraction so rows written under an
+            # older gate definition are judged by today's rules. Column is the fallback.
+            if prior_lead is not None:
+                prior_tier = classify_tier(prior_lead)
+            else:
+                prior_tier = tier_from_record(prior) if prior else None
             if prior_lead is not None:
                 extracted = merge_leads(prior_lead, extracted)
             result.extracted = extracted
@@ -111,8 +122,10 @@ class Pipeline:
             result.tier = tier
             result.status = status_for_tier(tier)
             result.is_upgrade = prior_tier == Tier.TIER_3 and tier != Tier.TIER_3
+            if extracted.has_gate_fields:
+                result.match_request = build_match_request(extracted, email, today=now.date())
             logger.info(
-                f"LEAD — {tier.value} | upgrade={result.is_upgrade} | "
+                f"LEAD — {tier.value} | upgrade={result.is_upgrade} | match_ready={result.match_ready} | "
                 f"confidence={extracted.confidence} | from={email.sender_email}"
             )
 
@@ -177,6 +190,7 @@ class Pipeline:
             "Tier": result.tier.value if result.tier else None,
             "Status": result.status.value,
             "Should Reply": result.should_reply,
+            "Match Ready": result.match_ready,
             "Skip Reason": result.reply_skip_reason,
             "Error": result.error,
             "Tokens": result.total_tokens,

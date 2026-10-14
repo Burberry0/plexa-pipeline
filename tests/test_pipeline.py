@@ -200,3 +200,92 @@ def test_to_dict_shape(base_config, make_email):
     assert d["tokens"]["total"] == 110
     assert "zip_code" in d["extraction"]
     assert "amenities" in d["extraction"]
+
+
+# ── Property-matching hand-off ───────────────────────────────────────────────
+
+def test_match_request_present_when_match_ready(base_config, make_email):
+    r = _pipeline(base_config).process_email(make_email(), persist=False)
+    assert r.match_request["q72_desiredZip"] == "89052"
+    assert r.match_request["q6_q6_number4"] == "2"
+    d = r.to_dict()
+    assert d["match"]["ready"] is True
+    assert d["match"]["missing_fields"] == []
+    assert d["match"]["request"] == r.match_request
+
+
+def test_match_request_absent_for_tier3(base_config, make_email):
+    r = _pipeline(base_config, ai=FakeAI(lead=ExtractedLead(bedrooms=2))).process_email(make_email(), persist=False)
+    assert r.match_request is None
+    d = r.to_dict()
+    assert d["match"] == {"ready": False, "missing_fields": ["zip_code", "move_in_date"], "request": None}
+
+
+def test_junk_and_duplicate_report_not_match_ready(base_config, make_email):
+    at = FakeAirtable()
+    junk = _pipeline(base_config, ai=FakeAI(classification=Classification.JUNK), airtable=at).process_email(make_email(message_id="j1"))
+    assert junk.to_dict()["match"] == {"ready": False, "missing_fields": [], "request": None}
+    p = _pipeline(base_config, airtable=at)
+    p.process_email(make_email(message_id="m1"))
+    dup = p.process_email(make_email(message_id="m1"))
+    assert dup.to_dict()["match"] == {"ready": False, "missing_fields": [], "request": None}
+
+
+def test_asap_match_request_uses_pipeline_now(base_config, make_email):
+    r = _pipeline(base_config).process_email(make_email(), persist=False)  # FakeAI default is ASAP
+    assert r.match_request["q13_q13_datetime11"] == {"month": "10", "day": "05", "year": "2026"}
+
+
+def test_match_ready_logged_on_messages_and_leads(base_config, make_email):
+    at = FakeAirtable()
+    _pipeline(base_config, airtable=at).process_email(make_email(message_id="m1"))
+    assert at.messages["m1"]["Match Ready"] is True
+    assert at.leads["sarah@example.com"][1]["Match Ready"] is True
+    _pipeline(base_config, ai=FakeAI(lead=ExtractedLead(bedrooms=2)), airtable=at).process_email(make_email(message_id="m2", sender_email="t3@example.com"))
+    assert at.messages["m2"]["Match Ready"] is False
+
+
+def _seed_legacy_tier1(at, make_email):
+    """A row written before the gate change: Henderson 2BR, stamped Tier 1, no zip or move-in."""
+    seeded = lead_to_airtable_fields(
+        ExtractedLead(location="Henderson", bedrooms=2, budget_max=1800.0, confidence=0.9),
+        Tier.TIER_1, LeadStatus.NEW, make_email(message_id="m0"),
+    )
+    seeded["Tier"] = "Tier 1"
+    seeded["Reply Count"] = 1
+    seeded["Last Reply At"] = "2026-10-05T11:00:00Z"
+    at.leads["sarah@example.com"] = ("rec1", seeded)
+
+
+def test_legacy_tier1_row_without_zip_is_asked_for_gates(base_config, make_email):
+    at = FakeAirtable()
+    _seed_legacy_tier1(at, make_email)
+    r = _pipeline(base_config, ai=FakeAI(lead=ExtractedLead(bedrooms=2)), airtable=at).process_email(make_email(message_id="m2"))
+    assert r.tier == Tier.TIER_3
+    assert r.is_upgrade is False
+    assert r.should_reply is True
+    assert r.reply_skip_reason == "ok"
+    assert "ZIP" in r.reply_html
+    assert r.match_request is None
+    assert at.leads["sarah@example.com"][1]["Tier"] == "Tier 3"
+
+
+def test_legacy_tier1_row_upgrades_when_zip_and_date_arrive(base_config, make_email):
+    at = FakeAirtable()
+    _seed_legacy_tier1(at, make_email)
+    second = FakeAI(lead=ExtractedLead(zip_code="89052", move_in_date="2026-12-01"))
+    r = _pipeline(base_config, ai=second, airtable=at).process_email(make_email(message_id="m2"))
+    assert r.is_upgrade is True
+    assert r.tier == Tier.TIER_1  # merged budget is the bonus
+    assert "exactly what we needed" in r.reply_html
+    assert r.match_request["q72_desiredZip"] == "89052"
+    assert r.match_request["q6_q6_number4"] == "2"
+    assert at.leads["sarah@example.com"][1]["Match Ready"] is True
+
+
+def test_prior_tier_falls_back_to_column_without_extraction_json(base_config, make_email):
+    at = FakeAirtable()
+    at.leads["sarah@example.com"] = ("rec1", {"Email": "sarah@example.com", "Tier": "Tier 3", "Reply Count": 1, "Last Reply At": "2026-10-05T11:00:00Z"})
+    r = _pipeline(base_config, airtable=at).process_email(make_email(message_id="m2"))
+    assert r.is_upgrade is True
+    assert r.should_reply is True

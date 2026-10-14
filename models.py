@@ -142,6 +142,7 @@ class PipelineResult:
     reply_html: Optional[str] = None
     should_reply: bool = False
     reply_skip_reason: Optional[str] = None
+    match_request: Optional[dict] = None  # JotForm-shaped body; set only when match-ready
     error: Optional[str] = None
     processing_time_ms: float = 0.0
 
@@ -156,6 +157,14 @@ class PipelineResult:
     @property
     def total_tokens(self) -> int:
         return self.junk_filter_tokens + self.extraction_tokens
+
+    @property
+    def match_ready(self) -> bool:
+        return self.extracted is not None and self.extracted.has_gate_fields
+
+    @property
+    def match_missing_fields(self) -> list:
+        return self.extracted.missing_gate_fields if self.extracted else []
 
     def to_dict(self) -> dict:
         """Serialize for API/demo output."""
@@ -189,6 +198,13 @@ class PipelineResult:
             "skip_reason": self.reply_skip_reason,
             "subject": self.reply_subject,
             "html": self.reply_html,
+        }
+        # n8n branches on match.ready after Slack approval and POSTs match.request
+        # to the property-matching workflow. Always present so the branch never sees undefined.
+        result["match"] = {
+            "ready": self.match_ready,
+            "missing_fields": self.match_missing_fields,
+            "request": self.match_request if self.match_ready else None,
         }
         if self.airtable_record_id:
             result["airtable_record_id"] = self.airtable_record_id
