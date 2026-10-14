@@ -9,7 +9,7 @@ from models import Classification, ExtractedLead
 class FakeAI:
     def __init__(self, classification=Classification.LEAD, lead: Optional[ExtractedLead] = None, extract_error: Optional[Exception] = None):
         self.classification = classification
-        self.lead = lead or ExtractedLead(location="Henderson", bedrooms=2, budget_max=1800.0, confidence=0.9)
+        self.lead = lead or ExtractedLead(location="Henderson", zip_code="89052", bedrooms=2, move_in_date="ASAP", budget_max=1800.0, confidence=0.9)
         self.extract_error = extract_error
         self.extract_calls = 0
 

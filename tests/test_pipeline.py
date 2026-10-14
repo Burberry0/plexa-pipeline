@@ -69,11 +69,12 @@ def test_tier3_then_reply_upgrades_and_merges(base_config, make_email):
 
     # Move the first reply out of the cooldown window so the guardrail does not block the upgrade reply
     at.leads["sarah@example.com"][1]["Last Reply At"] = "2026-10-05T11:00:00Z"
-    second = FakeAI(lead=ExtractedLead(location="Summerlin", bedrooms=3, confidence=0.5))
+    second = FakeAI(lead=ExtractedLead(zip_code="89135", bedrooms=3, move_in_date="2026-12-01", confidence=0.5))
     r2 = _pipeline(base_config, ai=second, airtable=at).process_email(make_email(message_id="m2", subject="Re: 2BR please"))
     assert r2.is_upgrade is True
     assert r2.tier == Tier.TIER_2
-    assert r2.extracted.location == "Summerlin"
+    assert r2.extracted.zip_code == "89135"
+    assert r2.extracted.location is None
     assert r2.extracted.bedrooms == 3
     assert "exactly what we needed" in r2.reply_html
     assert r2.airtable_record_id == "rec1"
@@ -123,7 +124,7 @@ def test_tier1_follow_up_gets_no_reply(base_config, make_email):
 def test_manual_status_survives_follow_up(base_config, make_email):
     at = FakeAirtable()
     seeded = lead_to_airtable_fields(
-        ExtractedLead(location="Henderson", bedrooms=2, budget_max=1800.0, confidence=0.9),
+        ExtractedLead(zip_code="89052", bedrooms=2, move_in_date="ASAP", budget_max=1800.0, confidence=0.9),
         Tier.TIER_1,
         LeadStatus.NEW,
         make_email(message_id="m0"),

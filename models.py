@@ -97,18 +97,19 @@ class ExtractedLead:
     missing_fields: list = field(default_factory=list)
     notes: Optional[str] = None
 
-    # Gate fields
-    GATE_FIELDS = ("location", "bedrooms")
+    # Gate fields: the minimum the property-matching workflow needs. All three
+    # present ⇔ match-ready ⇔ Tier 1 or 2. "ASAP" counts as a move-in date.
+    GATE_FIELDS = ("zip_code", "bedrooms", "move_in_date")
 
-    # Bonus fields
+    # Bonus fields: any one of these lifts a match-ready lead to Tier 1.
+    # `location` is excluded because a bare zip is copied into it as well.
     BONUS_FIELDS = (
-        "budget_min", "budget_max", "move_in_date",
-        "pets", "occupants", "duration_months"
+        "budget_min", "budget_max", "pets", "occupants", "duration_months", "bathrooms",
     )
 
     @property
     def has_gate_fields(self) -> bool:
-        return self.location is not None and self.bedrooms is not None
+        return all(getattr(self, f) is not None for f in self.GATE_FIELDS)
 
     @property
     def bonus_count(self) -> int:
@@ -123,12 +124,7 @@ class ExtractedLead:
 
     @property
     def missing_gate_fields(self) -> list:
-        missing = []
-        if self.location is None:
-            missing.append("location")
-        if self.bedrooms is None:
-            missing.append("bedrooms")
-        return missing
+        return [f for f in self.GATE_FIELDS if getattr(self, f) is None]
 
 
 @dataclass
