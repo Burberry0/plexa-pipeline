@@ -36,26 +36,26 @@ logger = logging.getLogger("plexa.demo")
 SAMPLE_EMAILS = [
     {
         "id": "tier1_full",
-        "label": "Tier 1 — Full Lead (Henderson, 2BR, budget, pets, move-in)",
+        "label": "Tier 1 — Match-ready (zip 89052, 2BR, move-in, budget, pets)",
         "sender_name": "Sarah Johnson",
         "sender_email": "sarah.j@gmail.com",
         "subject": "Looking for 2BR apartment",
         "body": (
-            "Hi, I'm moving to Las Vegas in June and need a 2 bedroom apartment. "
+            "Hi, I'm moving to Las Vegas on June 15th and need a 2 bedroom apartment. "
             "Budget around $1800/month. I have a small dog. "
-            "Looking for something in Henderson area. "
+            "Looking for something in Henderson, zip code 89052. "
             "It'll be me and my husband. Thanks!"
         ),
     },
     {
         "id": "tier2_gates_only",
-        "label": "Tier 2 — Gate Fields Only (location + bedrooms, no extras)",
+        "label": "Tier 2 — Gate Fields Only (zip + bedrooms + ASAP, no extras)",
         "sender_name": "James Chen",
         "sender_email": "jchen.lv@yahoo.com",
         "subject": "3BR rental in Summerlin?",
         "body": (
-            "Hi there, do you have any 3 bedroom places available in Summerlin? "
-            "Let me know what you've got."
+            "Hi there, do you have any 3 bedroom places available in 89135? "
+            "I need to move ASAP. Let me know what you've got."
         ),
     },
     {
@@ -76,6 +76,31 @@ SAMPLE_EMAILS = [
             "I'm looking for a studio or 1BR in zip code 89102. Budget up to $1200. "
             "I'm on Section 8. Move-in date flexible but prefer by end of July. "
             "Just me, no pets."
+        ),
+    },
+    {
+        "id": "tier3_missing_zip",
+        "label": "Tier 3 — Neighborhood but no ZIP (asked for a zip code)",
+        "sender_name": "Priya Nair",
+        "sender_email": "priya.nair@gmail.com",
+        "subject": "2BR in Henderson",
+        "body": (
+            "Hello! We're relocating and need a 2 bedroom in Henderson starting November 1st. "
+            "Budget is up to $2,000 a month. Two adults, no pets."
+        ),
+    },
+    {
+        "id": "tier1_company_with_pets_amenities",
+        "label": "Tier 1 — Company request with pets, amenities, phone",
+        "sender_name": "Dana Whitfield",
+        "sender_email": "dana.whitfield@acmerelocation.com",
+        "subject": "Furnished 3BR/2BA for relocating engineer - 89147",
+        "body": (
+            "Hi, I'm with Acme Relocation placing one of our client's engineers in Las Vegas. "
+            "We need a furnished 3 bedroom, 2 bath single-story home in zip 89147 with a pool and a 2-car garage, "
+            "move-in October 20, 2026, 6 month lease. Two adults and one child. "
+            "They have two dogs: a 40 lb Husky and a 10 lb Chihuahua. Budget up to $3,500.\n\n"
+            "Dana Whitfield\nAcme Relocation\n(702) 555-0199"
         ),
     },
     {
@@ -187,7 +212,9 @@ def run_demo(output_json: bool = False):
                 ext = result.extracted
                 print(f"\n  📊 Extraction Results:")
                 print(f"     Location:    {ext.location or '—'}")
+                print(f"     Zip Code:    {ext.zip_code or '—'}")
                 print(f"     Bedrooms:    {'Studio' if ext.bedrooms == 0 else (ext.bedrooms or '—')}")
+                print(f"     Bathrooms:   {ext.bathrooms or '—'}")
                 if ext.budget_min or ext.budget_max:
                     bmin = f"${ext.budget_min:,.0f}" if ext.budget_min else "—"
                     bmax = f"${ext.budget_max:,.0f}" if ext.budget_max else "—"
@@ -198,6 +225,9 @@ def run_demo(output_json: bool = False):
                 print(f"     Pets:        {', '.join(ext.pets) if ext.pets else ('None' if ext.pets == [] else '—')}")
                 print(f"     Occupants:   {ext.occupants or '—'}")
                 print(f"     Duration:    {f'{ext.duration_months} months' if ext.duration_months else '—'}")
+                print(f"     Amenities:   {', '.join(ext.amenities) if ext.amenities else ('None' if ext.amenities == [] else '—')}")
+                print(f"     Phone:       {ext.phone or '—'}")
+                print(f"     Requester:   {ext.requester_type or '—'}{f' ({ext.company_name})' if ext.company_name else ''}")
                 print(f"     Confidence:  {ext.confidence}")
                 if ext.missing_fields:
                     print(f"     Missing:     {', '.join(ext.missing_fields)}")
@@ -210,6 +240,14 @@ def run_demo(output_json: bool = False):
                 print(f"\n  🎯 Tier Action: {ts['action']}")
                 if "follow_up_questions" in ts and ts["follow_up_questions"]:
                     print(f"     Follow-up: {ts['follow_up_questions'][0]}")
+
+            # Property-matching hand-off
+            if result.match_ready:
+                mr = result.match_request
+                print(f"\n  🏠 Match request ready → zip {mr['q72_desiredZip']}, {mr['q6_q6_number4']}BR, "
+                      f"move-in {mr['q13_q13_datetime11']['month']}/{mr['q13_q13_datetime11']['day']}/{mr['q13_q13_datetime11']['year']}")
+            elif result.extracted:
+                print(f"\n  ⏸️  Not match-ready — missing: {', '.join(result.match_missing_fields)}")
 
         all_results.append(result_dict)
 
