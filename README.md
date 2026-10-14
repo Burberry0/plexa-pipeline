@@ -116,6 +116,25 @@ Golden-set results on 2026-10-13 (`python -m evals.run_eval`, 7-case set; the
 | `kimi-k2.7-code` | — | — | Rejects `temperature` other than 1; not supported by this client. |
 | `glm-5.3` | — | — | Returned malformed or empty JSON. |
 
+### Extraction v2.0.0 (10-case set, 2026-10-14)
+
+Two runs of `python -m evals.run_eval --junk-model glm-5.3-flash --extraction-model glm-5.3-flash`
+during an unstable OpenCode window:
+
+| Metric | Run A | Run B |
+|---|---|---|
+| Cases answered by the provider | 8/10 | 6/10 |
+| Classification correct (of answered) | 8/8 | 6/6 |
+| Tier, zip, match-ready correct (of answered) | 8/8 | 6/6 |
+| Provider timeouts / connection errors | 2 | 4 |
+
+Every case that received a response was scored correctly on classification, tier,
+zip and match-readiness; across the two runs each of the 10 cases succeeded at
+least once. Re-run on a quiet provider window before go-live to get a clean
+10/10 row. Note the local `.env` must set both model names: with only
+`OPENCODE_API_KEY` the defaults are OpenAI names and OpenCode returns
+`Model is unavailable`.
+
 Without `OPENCODE_API_KEY` the service falls back to OpenAI (`gpt-4o-mini` / `gpt-4o`, roughly $0.01 per lead).
 
 ## Prompt evals
