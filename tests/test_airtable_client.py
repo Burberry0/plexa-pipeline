@@ -127,6 +127,45 @@ def test_lead_to_fields_and_back(make_email):
     assert tier_from_record(record) == Tier.TIER_1
 
 
+def test_new_matching_columns_round_trip(make_email):
+    lead = ExtractedLead(
+        location="Henderson", zip_code="89102", bedrooms=2, move_in_date="2026-11-01",
+        phone="7025551234", bathrooms=1.5, adults=1, children=0,
+        amenities=["Pool", "Yard"], special_requests="Section 8", confidence=0.9,
+    )
+    fields = lead_to_airtable_fields(lead, Tier.TIER_1, LeadStatus.NEW, make_email())
+    assert fields["Zip Code"] == "89102"
+    assert fields["Phone"] == "7025551234"
+    assert fields["Bathrooms"] == 1.5
+    assert fields["Adults"] == 1
+    assert fields["Children"] == 0
+    assert fields["Amenities"] == "Pool, Yard"
+    assert fields["Special Requests"] == "Section 8"
+    assert fields["Match Ready"] is True
+    assert lead_from_record(LeadRecord("rec", fields)) == lead
+
+
+def test_match_ready_false_is_written_not_omitted(make_email):
+    fields = lead_to_airtable_fields(ExtractedLead(location="Henderson"), Tier.TIER_3, LeadStatus.ON_HOLD, make_email())
+    assert fields["Match Ready"] is False
+    assert "Zip Code" not in fields
+    assert "Amenities" not in fields
+
+
+def test_lead_from_record_accepts_legacy_12_field_json():
+    legacy = {
+        "location": "Henderson", "bedrooms": 2, "budget_min": None, "budget_max": 1800.0,
+        "move_in_date": None, "pets": ["1 dog"], "occupants": None, "duration_months": None,
+        "pet_friendly_required": None, "confidence": 0.9, "missing_fields": [], "notes": None,
+    }
+    lead = lead_from_record(LeadRecord("rec", {"Extraction JSON": json.dumps(legacy)}))
+    assert lead.location == "Henderson"
+    assert lead.pets == ["1 dog"]
+    assert lead.zip_code is None
+    assert lead.pet_details is None
+    assert lead.amenities is None
+
+
 def test_lead_from_record_handles_missing_or_bad_json():
     assert lead_from_record(LeadRecord("r", {})) is None
     assert lead_from_record(LeadRecord("r", {"Extraction JSON": "{not json"})) is None
