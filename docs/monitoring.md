@@ -209,7 +209,7 @@ Interfaces → Create → start from blank. Four elements:
 | 1 | Number ("Last processed") | Messages | none | Summary: Max of `Processed At` |
 | 2 | Chart or Grid ("Last 24h by tier") | Messages | `Processed At` is within past 1 day | Group by `Tier` |
 | 3 | Grid ("Manual Review, 7d") | Messages | `Status` is `Manual Review` AND `Processed At` within past 7 days | `Email`, `Subject`, `Error`, `Processed At` |
-| 4 | Grid ("Leads needing a human") | Leads | `Status` is `Needs Review` | `Email`, `Name`, `Tier`, `Last Subject`, `Last Contact` |
+| 4 | Grid ("Leads needing a human") | Leads | `Status` is `Needs Review` | `Email`, `Name`, `Tier`, `Match Ready`, `Last Subject`, `Last Contact` |
 
 Share the Interface with Ryan as a collaborator with read access to the base.
 

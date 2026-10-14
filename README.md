@@ -13,12 +13,15 @@ InboundEmail (from n8n webhook)
  ├─ 1. HTML → plaintext strip (ingestion.strip_html)
  ├─ 2. Junk filter [glm-5.3-flash via OpenCode Go] → LEAD / JUNK
  │    └─ JUNK: stop. Logged to Messages. No extraction.
- ├─ 3. AI extraction [glm-5.3-flash, strict JSON schema] → ExtractedLead (12 fields)
+ ├─ 3. AI extraction [glm-5.3-flash, strict JSON schema] → ExtractedLead (26 fields)
  │    └─ Merged over the sender's prior Leads record if one exists
  ├─ 4. Tier classification [validation.py] → Tier 1 / 2 / 3, upgrade detection
+ │    └─ Match-ready (Tier 1/2) → match.request [match_request.py], a JotForm-shaped
+ │       body for the Property Matching workflow
  ├─ 5. Reply decision [guardrails.py] + rendered reply [email_templates.py]
  └─ 6. Airtable upsert (all tiers) + Messages log
-       n8n sends the reply when reply.should_send is true.
+       n8n sends the reply when reply.should_send is true and, after the same
+       Slack approval, POSTs match.request to property matching when match.ready is true.
 ```
 
 ## Quick Start
@@ -32,7 +35,7 @@ pip install -r requirements.txt
 export OPENCODE_API_KEY=...
 export JUNK_FILTER_MODEL=glm-5.3-flash EXTRACTION_MODEL=glm-5.3-flash
 
-# Run the demo (7 sample emails)
+# Run the demo (9 sample emails)
 python demo.py
 
 # Run with JSON output
@@ -75,15 +78,23 @@ See also: [`docs/n8n-workflow.md`](docs/n8n-workflow.md), [`docs/airtable-schema
 | `airtable_client.py` | Airtable REST client. Leads upsert, Messages log, field mapping. |
 | `guardrails.py` | Reply decision: kill switch, max replies, cooldown. Pure. |
 | `alerts.py` | Slack-compatible webhook alert on pipeline errors. |
+| `match_request.py` | Pure builder: ExtractedLead → JotForm-shaped body for the Property Matching workflow. |
 | `evals/` | Golden email set and eval runner. |
 
 ## Tier Classification
 
+Gate fields are the minimum the Property Matching workflow needs: **ZIP code,
+bedrooms, move-in date** (`"ASAP"` counts). A lead with all three is
+match-ready and the response carries `match.request`.
+
 | Tier | Conditions | Action |
 |------|-----------|--------|
-| **Tier 1** | Location + Bedrooms + ≥1 bonus field | Auto-match immediately |
-| **Tier 2** | Location + Bedrooms only | Match + soft follow-up |
-| **Tier 3** | Missing location or bedrooms | Hold — ask for missing info |
+| **Tier 1** | ZIP + Bedrooms + Move-in + ≥1 bonus field (budget, pets, occupants, lease length, bathrooms) | Match-ready; sent to property matching on Slack approval; full confirmation |
+| **Tier 2** | ZIP + Bedrooms + Move-in only | Match-ready; sent to property matching on Slack approval; soft follow-up |
+| **Tier 3** | Any gate field missing | Hold — ask for exactly the missing ones |
+
+A neighborhood or city without a ZIP code does not satisfy the gate; the
+reply asks for one.
 
 ## AI provider and cost
 
@@ -93,7 +104,9 @@ dollar terms with 5-hour and weekly windows; check the OpenCode console if
 `Manual Review` rows show 429s. Only models served on OpenCode's
 `/chat/completions` endpoint work (GLM, Kimi, DeepSeek, MiMo, LongCat).
 
-Golden-set results on 2026-10-13 (`python -m evals.run_eval`):
+Golden-set results on 2026-10-13 (`python -m evals.run_eval`, 7-case set; the
+10-case set with zip and match-readiness scoring is re-run below under
+"Extraction v2.0.0"):
 
 | Model (both roles) | Classification | Tier | Notes |
 |---|---|---|---|
@@ -110,8 +123,10 @@ Without `OPENCODE_API_KEY` the service falls back to OpenAI (`gpt-4o-mini` / `gp
 `evals/golden_emails.jsonl` holds labeled real emails. Add one JSON object per
 line with `id`, `sender_name`, `sender_email`, `subject`, `body`,
 `expected_classification` (`LEAD`/`JUNK`), `expected_tier` (`Tier 1`/`Tier 2`/
-`Tier 3`/`null`), `expected_location` (substring, or `null`) and
-`expected_bedrooms` (integer or `null`). Strip real names and phone numbers.
+`Tier 3`/`null`), `expected_location` (substring, or `null`),
+`expected_bedrooms` (integer or `null`), `expected_zip_code` (5-digit string
+or `null`) and `expected_match_ready` (bool, true only for Tier 1/2). Strip
+real names and phone numbers.
 
 ```bash
 python -m evals.run_eval --min-tier-accuracy 0.9
