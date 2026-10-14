@@ -104,10 +104,9 @@ def tier_summary(tier: Tier, lead: ExtractedLead) -> dict:
     return summary
 
 
-MERGEABLE_FIELDS = (
-    "location", "bedrooms", "budget_min", "budget_max", "move_in_date",
-    "pets", "occupants", "duration_months", "pet_friendly_required",
-)
+# Every extracted value merges (new non-null wins); only the bookkeeping fields are recomputed.
+NON_MERGEABLE_FIELDS = ("confidence", "missing_fields", "notes")
+MERGEABLE_FIELDS = tuple(f for f in ExtractedLead.__dataclass_fields__ if f not in NON_MERGEABLE_FIELDS)
 
 
 def merge_leads(prior: ExtractedLead, new: ExtractedLead) -> ExtractedLead:

@@ -80,3 +80,21 @@ def test_status_for_tier():
     assert status_for_tier(Tier.TIER_1) == LeadStatus.NEW
     assert status_for_tier(Tier.TIER_2) == LeadStatus.NEEDS_REVIEW
     assert status_for_tier(Tier.TIER_3) == LeadStatus.ON_HOLD
+
+
+from validation import MERGEABLE_FIELDS  # noqa: E402
+
+
+def test_mergeable_fields_cover_every_extraction_field():
+    expected = set(ExtractedLead.__dataclass_fields__) - {"confidence", "missing_fields", "notes"}
+    assert set(MERGEABLE_FIELDS) == expected
+
+
+def test_merge_list_fields_and_new_scalars():
+    prior = ExtractedLead(zip_code="89102", amenities=["Pool"], phone="7025551234")
+    new = ExtractedLead(amenities=[], bathrooms=1.5)
+    merged = merge_leads(prior, new)
+    assert merged.amenities == []
+    assert merged.zip_code == "89102"
+    assert merged.phone == "7025551234"
+    assert merged.bathrooms == 1.5

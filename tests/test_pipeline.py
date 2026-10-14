@@ -197,3 +197,5 @@ def test_to_dict_shape(base_config, make_email):
     assert d["reply"]["should_send"] is True
     assert d["email"]["message_id"] == "msg-1"
     assert d["tokens"]["total"] == 110
+    assert "zip_code" in d["extraction"]
+    assert "amenities" in d["extraction"]

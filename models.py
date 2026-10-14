@@ -3,7 +3,7 @@ Plexa Housing — Canonical Data Models
 All data shapes used across the pipeline.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Optional
 from datetime import datetime, timezone
@@ -26,6 +26,19 @@ class LeadStatus(Enum):
 class Classification(Enum):
     LEAD = "LEAD"
     JUNK = "JUNK"
+
+
+def split_name(sender_name) -> tuple:
+    """Split a display name into (first, last). Handles 'First Last', 'First Middle Last'
+    (middle goes with last) and 'Last, First'. Empty input gives ("", "")."""
+    name = (sender_name or "").strip()
+    if not name:
+        return "", ""
+    if "," in name:
+        last, _, first = (p.strip() for p in name.partition(","))
+        return (first.split()[0] if first else ""), last
+    parts = name.split()
+    return parts[0], " ".join(parts[1:])
 
 
 @dataclass
@@ -65,6 +78,21 @@ class ExtractedLead:
     occupants: Optional[int] = None
     duration_months: Optional[int] = None
     pet_friendly_required: Optional[bool] = None
+    # Property-matching inputs (JotForm contract, see match_request.py)
+    zip_code: Optional[str] = None
+    phone: Optional[str] = None
+    bathrooms: Optional[float] = None
+    square_feet: Optional[int] = None
+    adults: Optional[int] = None
+    children: Optional[int] = None
+    pet_count: Optional[int] = None
+    pet_details: Optional[list] = None  # [{"type": "Dog"|"Cat"|"Other", "description": str|None}]
+    garage_required: Optional[bool] = None
+    garage_spaces: Optional[int] = None
+    amenities: Optional[list] = None  # JotForm amenity labels; [] = none requested
+    special_requests: Optional[str] = None
+    requester_type: Optional[str] = None  # "Individual" | "Company"
+    company_name: Optional[str] = None
     confidence: float = 0.0
     missing_fields: list = field(default_factory=list)
     notes: Optional[str] = None
@@ -156,20 +184,7 @@ class PipelineResult:
             },
         }
         if self.extracted:
-            result["extraction"] = {
-                "location": self.extracted.location,
-                "bedrooms": self.extracted.bedrooms,
-                "budget_min": self.extracted.budget_min,
-                "budget_max": self.extracted.budget_max,
-                "move_in_date": self.extracted.move_in_date,
-                "pets": self.extracted.pets,
-                "occupants": self.extracted.occupants,
-                "duration_months": self.extracted.duration_months,
-                "pet_friendly_required": self.extracted.pet_friendly_required,
-                "confidence": self.extracted.confidence,
-                "missing_fields": self.extracted.missing_fields,
-                "notes": self.extracted.notes,
-            }
+            result["extraction"] = asdict(self.extracted)
         if self.tier:
             result["tier"] = self.tier.value
         result["status"] = self.status.value
