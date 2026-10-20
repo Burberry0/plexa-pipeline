@@ -1,6 +1,25 @@
-# n8n Workflow: Gmail → Plexa Pipeline → Reply
+# n8n Workflow: Gmail → Plexa Pipeline → Reply → Property Matching
 
-Six nodes. n8n owns all Gmail I/O; the Python service never touches Gmail.
+n8n owns all Gmail I/O and the hand-off to the Property Matching workflow; the
+Python service never touches Gmail and never POSTs to matching. One Slack
+approval covers both the reply and, when the lead is match-ready, the match
+request.
+
+## Response fields n8n uses
+
+From `POST /ingest` (the full `PipelineResult.to_dict()`):
+
+| Field | Use |
+|---|---|
+| `status` | node 4 (`Manual Review` → Needs Attention label) |
+| `reply.should_send`, `reply.html`, `reply.subject`, `reply.skip_reason` | nodes 5, 5a, 6a |
+| `match.ready` (bool) | node 6d; true only when zip, bedrooms and move-in are all known |
+| `match.missing_fields` (list) | nodes 3b and 5a log text |
+| `match.request` (object or null) | node 6e body: a JotForm-shaped submission for the matching workflow's Webhook node |
+| `extraction.*` | node 3b log text (now includes `zip_code`, `bathrooms`, `amenities`, `phone`, `requester_type`) |
+
+`match` is present on every response (JUNK, duplicate and error responses carry
+`{ready: false, missing_fields: [], request: null}`), so node 6d never sees `undefined`.
 
 ## 1. Gmail Trigger
 - Credential: Plexa inbox OAuth2
@@ -44,10 +63,12 @@ the channel shows how the pipeline evaluated it:
 - Duplicates and JUNK: one line each (`:repeat: Duplicate skipped — …`,
   `:wastebasket: JUNK — …`).
 - Leads: classification, tier, status, sender, subject; then the extracted
-  fields (location, bedrooms, budget range, move-in, pets, occupants,
-  duration), confidence, missing fields, extractor notes; then
-  `Needs attention: YES/no` (with the error text when YES) and
-  `Reply decision: SEND → awaiting approval in Slack` or `skip (<skip_reason>)`.
+  fields (location, zip, bedrooms, bathrooms, budget range, move-in, pets,
+  occupants, duration, amenities), confidence, missing fields, extractor notes;
+  then `Needs attention: YES/no` (with the error text when YES),
+  `Reply decision: SEND → awaiting approval in Slack` or `skip (<skip_reason>)`,
+  and `Match ready: yes` or `Match ready: no (missing: zip_code, move_in_date)`
+  from `$json.match`.
 
 Reads `$json` (the `/ingest` response) and `$('Build payload').item.json`.
 Returns `{ text }`.
@@ -71,9 +92,12 @@ Returns `{ text }`.
 ## 5a. Code — "Build approval"
 Mode: Run Once for All Items. Produces the approval request text: tier,
 sender, subject; the inbound email as plain text (body_plain, or body_html
-with tags stripped), quoted; the proposed reply with tags stripped, quoted.
-Reads `$('POST /ingest').item.json` and `$('Build payload').item.json`.
-Returns `{ text }`.
+with tags stripped), quoted; the proposed reply with tags stripped, quoted;
+and one last line so the approver knows what the click triggers:
+`Approving will also send a property-match request: YES (zip 89052, 2BR, move-in 2026-11-01)`
+or `Approving will also send a property-match request: no (missing: zip_code)`.
+Reads `$('POST /ingest').item.json` (including `.match`) and
+`$('Build payload').item.json`. Returns `{ text }`.
 
 ## 5b. Slack — "Approve reply?" (human in the loop)
 - Credential: a Slack **bot** credential (the incoming webhook cannot wait for
@@ -97,6 +121,36 @@ Returns `{ text }`.
 - Message: `{{ $('POST /ingest').item.json.reply.html }}`
 - Options: Reply to Sender Only ON. Subject is inherited from the thread; if the
   node exposes a Subject field, set `{{ $('POST /ingest').item.json.reply.subject }}`.
+- Output → node 6d.
+
+## 6d. IF — "Match ready?"
+- Condition: Boolean `{{ $('POST /ingest').item.json.match.ready === true }}` is true
+- True → node 6e. False → node 6b.
+
+Only approved messages reach this node, and approval only happens when
+`reply.should_send` was true (first contact, or a follow-up from a Tier 3
+sender). A follow-up from a sender who is already Tier 1/2 never auto-posts a
+match request; a human handles it from `Needs Review`.
+
+## 6e. HTTP Request — "POST matching"
+- Method: POST
+- URL: the Property Matching workflow's **Webhook node** production URL. Store
+  it as an n8n variable `MATCHING_WEBHOOK_URL` (or paste it); it is not a
+  Python env var and must not be added to the service.
+- Send Body: JSON, Body: `{{ JSON.stringify($('POST /ingest').item.json.match.request) }}`
+- Options: Timeout 30000 ms; Retry on fail ON, 1 retry, 5000 ms wait.
+- The body is the same shape as a JotForm submission (`q2_q2_fullname0`,
+  `q18_whatEmail`, `q72_desiredZip`, `q13_q13_datetime11`, …) plus `source:
+  "email"`, `message_id`, `thread_id` for tracing. The matching workflow's
+  existing formatting, geocoding, Request_ID and Priority nodes run unchanged.
+  Verify once against a real submission in that workflow's execution log that
+  it reads `$json.body` (not `$json.body.rawRequest`) and that
+  `q11_q11_checkbox9` arrives as an array.
+- Output → node 6f.
+
+## 6f. HTTP Request — "Slack match log"
+- POST to the Slack webhook:
+  `{{ JSON.stringify({ text: ':house: Match request sent to property matching for ' + $('Build payload').item.json.sender_email + ' (' + $('POST /ingest').item.json.tier + ', zip ' + $('POST /ingest').item.json.match.request.q72_desiredZip + ')' }) }}`
 - Output → node 6b.
 
 ## 6c. (declined) HTTP Request — "Slack declined"
@@ -104,7 +158,7 @@ Returns `{ text }`.
   `{{ JSON.stringify({ text: ':no_entry: Reply declined (or approval timed out) for ' + $('Build payload').item.json.sender_email + ' — "' + $('Build payload').item.json.subject + '". Nothing sent.' }) }}`
 - Output → node 6b.
 
-## 6b. Gmail — Add Label (reached from 5 false, 6a, and 6c)
+## 6b. Gmail — Add Label (reached from 5 false, 6c, 6d false, and 6f)
 - Operation: Add Labels, Message ID as above, Label: `Plexa/Processed`
 - Do NOT mark as read; leave read state to Ryan.
 
@@ -129,5 +183,13 @@ follow-up messages, and `follow_up` for Tier 1/2 follow-ups. Leads and Messages
 are still written to Airtable either way.
 
 Possible `reply.skip_reason` values: `auto_reply_disabled`, `max_replies_reached`, `cooldown_active`, `follow_up`, `junk`, `duplicate`, `pipeline_error`.
-`follow_up` means a sender whose Leads row is already Tier 1 or Tier 2 wrote again;
-the service does not auto-reply and sets the lead to `Needs Review` for a human.
+`follow_up` means a sender whose stored extraction already satisfies the gate
+(Tier 1 or Tier 2 under today's rules) wrote again; the service does not
+auto-reply and sets the lead to `Needs Review` for a human.
+
+## Property-matching hand-off (nodes 6d–6f)
+
+The service only *builds* `match.request`; n8n sends it, and only after the
+same human approval that gates the reply. Node names `POST /ingest` and
+`Build payload` are referenced by expressions in 6d–6f; do not rename them.
+To pause the hand-off without touching replies, disable node 6e.

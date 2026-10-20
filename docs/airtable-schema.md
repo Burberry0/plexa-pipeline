@@ -3,6 +3,12 @@
 Create one base with two tables. Field names must match exactly (the service
 writes by name). Single-select options must exist before the first write.
 
+**Every column below must exist before the matching build is deployed.** A
+missing column makes Airtable return 422 and sends every lead to `Manual
+Review`. Columns added for the property-matching hand-off (2026-10-13): Zip
+Code, Phone, Bathrooms, Adults, Children, Amenities, Special Requests, Match
+Ready on Leads; Match Ready on Messages.
+
 ## Table: Leads (one record per sender email)
 
 The service upserts with `fieldsToMergeOn: ["Email"]`, so Email must stay the primary field and unique.
@@ -20,6 +26,14 @@ The service upserts with `fieldsToMergeOn: ["Email"]`, so Email must stay the pr
 | Occupants | Number (integer) | |
 | Duration Months | Number (integer) | |
 | Pet Friendly Required | Checkbox | |
+| Zip Code | Single line text | 5 digits; the match-ready gate field |
+| Phone | Single line text | As written in the email |
+| Bathrooms | Number (1 decimal) | |
+| Adults | Number (integer) | |
+| Children | Number (integer) | |
+| Amenities | Long text | Comma-joined JotForm labels, e.g. "Pool, Yard" |
+| Special Requests | Long text | Renter-stated needs (Section 8, ADA, …) |
+| Match Ready | Checkbox | True when zip, bedrooms and move-in are all known; written on every upsert |
 | Confidence | Number (2 decimals) | |
 | Notes | Long text | |
 | Tier | Single select | Options: `Tier 1`, `Tier 2`, `Tier 3` |
@@ -41,6 +55,7 @@ The service upserts with `fieldsToMergeOn: ["Email"]`, so Email must stay the pr
 | Tier | Single select | Options: `Tier 1`, `Tier 2`, `Tier 3` |
 | Status | Single select | Same options as Leads.Status |
 | Should Reply | Checkbox | |
+| Match Ready | Checkbox | Lead was match-ready after this message |
 | Skip Reason | Single line text | |
 | Error | Long text | |
 | Tokens | Number (integer) | |

@@ -3,7 +3,7 @@ Plexa Housing — Canonical Data Models
 All data shapes used across the pipeline.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Optional
 from datetime import datetime, timezone
@@ -26,6 +26,19 @@ class LeadStatus(Enum):
 class Classification(Enum):
     LEAD = "LEAD"
     JUNK = "JUNK"
+
+
+def split_name(sender_name) -> tuple:
+    """Split a display name into (first, last). Handles 'First Last', 'First Middle Last'
+    (middle goes with last) and 'Last, First'. Empty input gives ("", "")."""
+    name = (sender_name or "").strip()
+    if not name:
+        return "", ""
+    if "," in name:
+        last, _, first = (p.strip() for p in name.partition(","))
+        return (first.split()[0] if first else ""), last
+    parts = name.split()
+    return parts[0], " ".join(parts[1:])
 
 
 @dataclass
@@ -65,22 +78,38 @@ class ExtractedLead:
     occupants: Optional[int] = None
     duration_months: Optional[int] = None
     pet_friendly_required: Optional[bool] = None
+    # Property-matching inputs (JotForm contract, see match_request.py)
+    zip_code: Optional[str] = None
+    phone: Optional[str] = None
+    bathrooms: Optional[float] = None
+    square_feet: Optional[int] = None
+    adults: Optional[int] = None
+    children: Optional[int] = None
+    pet_count: Optional[int] = None
+    pet_details: Optional[list] = None  # [{"type": "Dog"|"Cat"|"Other", "description": str|None}]
+    garage_required: Optional[bool] = None
+    garage_spaces: Optional[int] = None
+    amenities: Optional[list] = None  # JotForm amenity labels; [] = none requested
+    special_requests: Optional[str] = None
+    requester_type: Optional[str] = None  # "Individual" | "Company"
+    company_name: Optional[str] = None
     confidence: float = 0.0
     missing_fields: list = field(default_factory=list)
     notes: Optional[str] = None
 
-    # Gate fields
-    GATE_FIELDS = ("location", "bedrooms")
+    # Gate fields: the minimum the property-matching workflow needs. All three
+    # present ⇔ match-ready ⇔ Tier 1 or 2. "ASAP" counts as a move-in date.
+    GATE_FIELDS = ("zip_code", "bedrooms", "move_in_date")
 
-    # Bonus fields
+    # Bonus fields: any one of these lifts a match-ready lead to Tier 1.
+    # `location` is excluded because a bare zip is copied into it as well.
     BONUS_FIELDS = (
-        "budget_min", "budget_max", "move_in_date",
-        "pets", "occupants", "duration_months"
+        "budget_min", "budget_max", "pets", "occupants", "duration_months", "bathrooms",
     )
 
     @property
     def has_gate_fields(self) -> bool:
-        return self.location is not None and self.bedrooms is not None
+        return all(getattr(self, f) is not None for f in self.GATE_FIELDS)
 
     @property
     def bonus_count(self) -> int:
@@ -95,12 +124,7 @@ class ExtractedLead:
 
     @property
     def missing_gate_fields(self) -> list:
-        missing = []
-        if self.location is None:
-            missing.append("location")
-        if self.bedrooms is None:
-            missing.append("bedrooms")
-        return missing
+        return [f for f in self.GATE_FIELDS if getattr(self, f) is None]
 
 
 @dataclass
@@ -118,6 +142,7 @@ class PipelineResult:
     reply_html: Optional[str] = None
     should_reply: bool = False
     reply_skip_reason: Optional[str] = None
+    match_request: Optional[dict] = None  # JotForm-shaped body; set only when match-ready
     error: Optional[str] = None
     processing_time_ms: float = 0.0
 
@@ -132,6 +157,19 @@ class PipelineResult:
     @property
     def total_tokens(self) -> int:
         return self.junk_filter_tokens + self.extraction_tokens
+
+    @property
+    def match_ready(self) -> bool:
+        # Failed runs clear match_request and must never look match-ready to n8n.
+        if self.error:
+            return False
+        return self.extracted is not None and self.extracted.has_gate_fields
+
+    @property
+    def match_missing_fields(self) -> list:
+        if self.error:
+            return []
+        return self.extracted.missing_gate_fields if self.extracted else []
 
     def to_dict(self) -> dict:
         """Serialize for API/demo output."""
@@ -156,20 +194,7 @@ class PipelineResult:
             },
         }
         if self.extracted:
-            result["extraction"] = {
-                "location": self.extracted.location,
-                "bedrooms": self.extracted.bedrooms,
-                "budget_min": self.extracted.budget_min,
-                "budget_max": self.extracted.budget_max,
-                "move_in_date": self.extracted.move_in_date,
-                "pets": self.extracted.pets,
-                "occupants": self.extracted.occupants,
-                "duration_months": self.extracted.duration_months,
-                "pet_friendly_required": self.extracted.pet_friendly_required,
-                "confidence": self.extracted.confidence,
-                "missing_fields": self.extracted.missing_fields,
-                "notes": self.extracted.notes,
-            }
+            result["extraction"] = asdict(self.extracted)
         if self.tier:
             result["tier"] = self.tier.value
         result["status"] = self.status.value
@@ -178,6 +203,13 @@ class PipelineResult:
             "skip_reason": self.reply_skip_reason,
             "subject": self.reply_subject,
             "html": self.reply_html,
+        }
+        # n8n branches on match.ready after Slack approval and POSTs match.request
+        # to the property-matching workflow. Always present so the branch never sees undefined.
+        result["match"] = {
+            "ready": self.match_ready,
+            "missing_fields": self.match_missing_fields,
+            "request": self.match_request if self.match_ready else None,
         }
         if self.airtable_record_id:
             result["airtable_record_id"] = self.airtable_record_id

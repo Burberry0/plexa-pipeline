@@ -1,7 +1,7 @@
 """
 Plexa Housing — Prompt eval runner
 Runs the golden set through the real pipeline (live model calls, no Airtable)
-and reports classification / tier / gate-field accuracy.
+and reports classification / tier / gate-field / match-readiness accuracy.
 
 Usage:
   python -m evals.run_eval                      # provider/models from env (.env is loaded)
@@ -51,13 +51,19 @@ def score_case(case: dict, result: PipelineResult) -> dict:
     else:
         location_ok = got_location is not None and exp_location in got_location
 
+    got_zip = extracted.zip_code if extracted else None
     return {
         "id": case["id"],
         "classification_ok": result.classification.value == case.get("expected_classification"),
         "tier_ok": (result.tier.value if result.tier else None) == case.get("expected_tier"),
         "location_ok": location_ok,
         "bedrooms_ok": got_bedrooms == case.get("expected_bedrooms"),
+        "zip_ok": got_zip == case.get("expected_zip_code"),
+        "match_ready_ok": result.match_ready == bool(case.get("expected_match_ready", False)),
     }
+
+
+SCORE_KEYS = ("classification_ok", "tier_ok", "location_ok", "bedrooms_ok", "zip_ok", "match_ready_ok")
 
 
 def format_line(score: dict, result: PipelineResult) -> str:
@@ -66,8 +72,9 @@ def format_line(score: dict, result: PipelineResult) -> str:
     tier = result.tier.value if result.tier else "-"
     loc = result.extracted.location if result.extracted else "-"
     br = result.extracted.bedrooms if result.extracted else "-"
-    line = (f"{flag} {score['id']:<24} cls={result.classification.value:<4} tier={tier:<7} "
-            f"loc={loc} br={br} ms={result.processing_time_ms:.0f}")
+    zip_code = result.extracted.zip_code if result.extracted else "-"
+    line = (f"{flag} {score['id']:<36} cls={result.classification.value:<4} tier={tier:<7} "
+            f"loc={loc} zip={zip_code} br={br} mr={result.match_ready} ms={result.processing_time_ms:.0f}")
     if result.error:
         line += f" err={result.error}"
     return line
@@ -85,7 +92,9 @@ def summarize(scores: list) -> dict:
         "tier_accuracy": acc("tier_ok"),
         "location_accuracy": acc("location_ok"),
         "bedrooms_accuracy": acc("bedrooms_ok"),
-        "failures": [s["id"] for s in scores if not all((s["classification_ok"], s["tier_ok"], s["location_ok"], s["bedrooms_ok"]))],
+        "zip_accuracy": acc("zip_ok"),
+        "match_ready_accuracy": acc("match_ready_ok"),
+        "failures": [s["id"] for s in scores if not all(s[k] for k in SCORE_KEYS)],
     }
 
 

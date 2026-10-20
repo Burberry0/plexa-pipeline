@@ -6,7 +6,7 @@ Tier-specific HTML email renderer.
 from html import escape as _esc
 
 from models import InboundEmail, ExtractedLead, Tier
-from validation import get_missing_field_questions
+from validation import bonus_questions, gate_questions
 
 
 BRAND_HEADER = """
@@ -61,12 +61,15 @@ def _recap_table(lead: ExtractedLead) -> str:
     rows = []
     fields = [
         ("Location", _clip(lead.location) if lead.location else lead.location),
+        ("Zip Code", lead.zip_code),
         ("Bedrooms", "Studio" if lead.bedrooms == 0 else lead.bedrooms),
+        ("Bathrooms", lead.bathrooms),
         ("Budget", _format_budget(lead.budget_min, lead.budget_max)),
         ("Move-in Date", lead.move_in_date),
         ("Pets", ", ".join(_clip(p) for p in lead.pets) if lead.pets else ("None" if lead.pets == [] else None)),
         ("Occupants", lead.occupants),
         ("Lease Duration", f"{lead.duration_months} months" if lead.duration_months else None),
+        ("Amenities", ", ".join(_clip(a) for a in lead.amenities) if lead.amenities else None),
     ]
     for label, value in fields:
         if value is not None:
@@ -126,7 +129,7 @@ def render_tier1_email(email: InboundEmail, lead: ExtractedLead) -> str:
 
 def render_tier2_email(email: InboundEmail, lead: ExtractedLead) -> str:
     """Tier 2 — Match + soft follow-up question."""
-    questions = get_missing_field_questions(lead)[:1]  # One soft ask
+    questions = bonus_questions(lead)[:1]  # One soft ask
     body = f"""
     <p style="color:#334155; line-height:1.6;">Hi {_esc(email.first_name)},</p>
     <p style="color:#334155; line-height:1.6;">
@@ -144,17 +147,14 @@ def render_tier2_email(email: InboundEmail, lead: ExtractedLead) -> str:
 
 def render_tier3_email(email: InboundEmail, lead: ExtractedLead) -> str:
     """Tier 3 — Missing gate fields. Ask before matching."""
-    questions = [
-        q for q in get_missing_field_questions(lead)
-        if any(kw in q.lower() for kw in ["area", "bedroom"])
-    ]
+    questions = gate_questions(lead)
     body = f"""
     <p style="color:#334155; line-height:1.6;">Hi {_esc(email.first_name)},</p>
     <p style="color:#334155; line-height:1.6;">
       Thanks for reaching out to Plexa Housing! We'd love to help you find the right rental.
     </p>
     <p style="color:#334155; line-height:1.6;">
-      To get started on a search, we just need a couple of details:
+      To get started on a search, we just need a few details:
     </p>
     {_question_list(questions)}
     <p style="color:#334155; line-height:1.6;">

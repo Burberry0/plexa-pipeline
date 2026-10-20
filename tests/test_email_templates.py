@@ -29,9 +29,27 @@ def test_upgrade_uses_upgrade_template(make_email):
 
 
 def test_tier3_asks_only_missing_gate_questions(make_email):
-    _, html = render_reply(Tier.TIER_3, False, make_email(), ExtractedLead(bedrooms=2))
-    assert "What area of Las Vegas" in html
+    _, html = render_reply(Tier.TIER_3, False, make_email(), ExtractedLead(location="Henderson", bedrooms=2))
+    assert "ZIP" in html
+    assert "move in" in html
     assert "How many bedrooms" not in html
+    assert "What area of Las Vegas" not in html
+
+
+def test_tier2_soft_ask_is_a_bonus_question(make_email):
+    _, html = render_reply(Tier.TIER_2, False, make_email(), ExtractedLead(zip_code="89052", bedrooms=2, move_in_date="ASAP"))
+    assert "monthly budget" in html
+    assert "ZIP" not in html
+
+
+def test_recap_shows_zip_bathrooms_amenities_and_escapes(make_email):
+    lead = ExtractedLead(zip_code="89052", bedrooms=2, move_in_date="ASAP", bathrooms=1.5,
+                         amenities=["Pool", "<b>Yard</b>"], phone="7025551234")
+    _, html = render_reply(Tier.TIER_1, False, make_email(), lead)
+    assert "Zip Code" in html and "89052" in html
+    assert "Bathrooms" in html and "1.5" in html
+    assert "Amenities" in html and "Pool, &lt;b&gt;Yard&lt;/b&gt;" in html
+    assert "7025551234" not in html
 
 
 def test_studio_renders_as_studio(make_email):
