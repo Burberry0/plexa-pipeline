@@ -111,6 +111,24 @@ NON_MERGEABLE_FIELDS = ("confidence", "missing_fields", "notes")
 MERGEABLE_FIELDS = tuple(f for f in ExtractedLead.__dataclass_fields__ if f not in NON_MERGEABLE_FIELDS)
 
 
+def lead_has_pets(lead: ExtractedLead) -> bool:
+    """True when the lead indicates at least one pet (empty pets=[] is not pets)."""
+    if isinstance(lead.pets, list) and len(lead.pets) > 0:
+        return True
+    if lead.pet_count is not None and lead.pet_count > 0:
+        return True
+    if isinstance(lead.pet_details, list) and len(lead.pet_details) > 0:
+        return True
+    return False
+
+
+def ensure_pet_friendly_required(lead: ExtractedLead) -> ExtractedLead:
+    """If the renter has pets, pet_friendly_required must be true on the response."""
+    if lead_has_pets(lead):
+        lead.pet_friendly_required = True
+    return lead
+
+
 def merge_leads(prior: ExtractedLead, new: ExtractedLead) -> ExtractedLead:
     """
     Merge a new extraction over a prior one for the same sender.
@@ -125,12 +143,12 @@ def merge_leads(prior: ExtractedLead, new: ExtractedLead) -> ExtractedLead:
     notes = list(dict.fromkeys(notes))  # dedupe, keep order
     missing = [m for m in new.missing_fields if merged.get(m) is None]
 
-    return ExtractedLead(
+    return ensure_pet_friendly_required(ExtractedLead(
         **merged,
         confidence=max(prior.confidence, new.confidence),
         missing_fields=missing,
         notes=" | ".join(notes) if notes else None,
-    )
+    ))
 
 
 def status_for_tier(tier: Tier) -> LeadStatus:

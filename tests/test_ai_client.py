@@ -118,11 +118,38 @@ def test_coerce_drops_extra_fields():
 
 
 def test_prompt_versions_bumped():
-    assert PROMPTS["extraction"]["version"] == "2.0.0"
-    assert PROMPTS["extraction"]["last_updated"] == "2026-10-13"
+    assert PROMPTS["extraction"]["version"] == "2.1.0"
+    assert PROMPTS["extraction"]["last_updated"] == "2026-10-19"
     assert PROMPTS["junk_filter"]["version"] == "1.1.0"
     assert "2026-06-15" not in PROMPTS["extraction"]["system_prompt"]
     assert "zip_code" in PROMPTS["extraction"]["system_prompt"]
+    assert "pet_friendly_required: true" in PROMPTS["extraction"]["system_prompt"]
+
+
+def test_coerce_sets_pet_friendly_required_when_pets_present():
+    assert coerce_extraction({"pets": ["1 small dog"], "pet_friendly_required": None})[
+        "pet_friendly_required"
+    ] is True
+    assert coerce_extraction({"pets": ["1 dog"], "pet_friendly_required": False})[
+        "pet_friendly_required"
+    ] is True
+    assert coerce_extraction({"pet_count": 1, "pet_friendly_required": None})[
+        "pet_friendly_required"
+    ] is True
+    assert coerce_extraction({
+        "pet_details": [{"type": "Dog", "description": None}],
+        "pet_friendly_required": None,
+    })["pet_friendly_required"] is True
+    # Explicit no pets / not mentioned — do not invent a requirement
+    assert coerce_extraction({"pets": [], "pet_friendly_required": None})[
+        "pet_friendly_required"
+    ] is None
+    assert coerce_extraction({"pets": None, "pet_friendly_required": None})[
+        "pet_friendly_required"
+    ] is None
+    assert coerce_extraction({"pets": [], "pet_friendly_required": False})[
+        "pet_friendly_required"
+    ] is False
 
 
 def test_coerce_zip_code():
@@ -240,3 +267,12 @@ def test_extract_none_mode_omits_response_format(make_email):
     lead, _ = AIClient(cfg, client=fake).extract_lead(make_email())
     assert "response_format" not in fake.chat.completions.last_kwargs
     assert lead.location == "Henderson"
+
+
+def test_coerce_move_in_date_is_asap_or_iso_or_null():
+    assert coerce_extraction({"move_in_date": "asap"})["move_in_date"] == "ASAP"
+    assert coerce_extraction({"move_in_date": "ASAP "})["move_in_date"] == "ASAP"
+    assert coerce_extraction({"move_in_date": " 2026-11-01 "})["move_in_date"] == "2026-11-01"
+    assert coerce_extraction({"move_in_date": "Nov 2026"})["move_in_date"] is None
+    assert coerce_extraction({"move_in_date": "2026-11"})["move_in_date"] is None
+    assert coerce_extraction({"move_in_date": None})["move_in_date"] is None

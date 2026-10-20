@@ -23,7 +23,7 @@ from email_templates import render_reply
 from guardrails import ReplyDecision, decide_reply
 from match_request import build_match_request
 from models import Classification, InboundEmail, LeadStatus, PipelineResult, Tier
-from validation import classify_tier, merge_leads, status_for_tier
+from validation import classify_tier, ensure_pet_friendly_required, merge_leads, status_for_tier
 
 logger = logging.getLogger("plexa.pipeline")
 
@@ -115,6 +115,8 @@ class Pipeline:
                 prior_tier = tier_from_record(prior) if prior else None
             if prior_lead is not None:
                 extracted = merge_leads(prior_lead, extracted)
+            # Pets imply pet-friendly must be required (model often leaves this null).
+            extracted = ensure_pet_friendly_required(extracted)
             result.extracted = extracted
 
             # ── 4. Tier + upgrade ─────────────────────────────────────
@@ -132,9 +134,14 @@ class Pipeline:
             # ── 5. Reply decision + render ────────────────────────────
             prior_fields = prior.fields if prior else {}
             reply_count = int(prior_fields.get("Reply Count") or 0)
+            prior_status = prior_fields.get("Status")
+            human_status = bool(prior and prior_status and prior_status not in AUTOMATIC_STATUSES)
             is_first_contact = prior is None
             is_tier3_follow_up = prior_tier == Tier.TIER_3
-            if is_first_contact or is_tier3_follow_up:
+            if human_status and not result.is_upgrade:
+                # Human-set status (e.g. Matched): do not auto-ask for missing gates.
+                decision = ReplyDecision(False, "follow_up")
+            elif is_first_contact or is_tier3_follow_up:
                 decision = decide_reply(
                     enabled=self.config.auto_reply_enabled,
                     reply_count=reply_count,
@@ -154,8 +161,7 @@ class Pipeline:
             # ── 6. Upsert ─────────────────────────────────────────────
             if airtable:
                 fields = lead_to_airtable_fields(extracted, tier, result.status, email)
-                prior_status = prior_fields.get("Status")
-                if prior and prior_status and prior_status not in AUTOMATIC_STATUSES and not result.is_upgrade:
+                if human_status and not result.is_upgrade:
                     fields.pop("Status", None)  # keep a human-set status (e.g. Matched)
                 if decision.should_reply:
                     fields["Reply Count"] = reply_count + 1
@@ -170,6 +176,7 @@ class Pipeline:
             result.status = LeadStatus.MANUAL_REVIEW
             result.should_reply = False
             result.reply_skip_reason = "pipeline_error"
+            result.match_request = None  # never hand n8n a match body after a failed run
             self.alert(
                 f":rotating_light: Plexa pipeline error\n"
                 f"From: {email.sender_email}\nSubject: {email.subject}\nError: {e}"

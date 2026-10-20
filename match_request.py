@@ -93,7 +93,8 @@ def _pet_count(lead: ExtractedLead) -> Optional[int]:
         return None
     total = 0
     for p in lead.pets:
-        m = re.match(r"\s*(\d+)", p)
+        # Only "2 dogs" / "1 cat" style counts — not "40 lb lab" weight prefixes.
+        m = re.match(r"\s*(\d+)\s+(dogs?|cats?|pets?|puppies|kittens)\b", p, re.I)
         total += int(m.group(1)) if m else 1
     return total
 

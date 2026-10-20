@@ -289,3 +289,25 @@ def test_prior_tier_falls_back_to_column_without_extraction_json(base_config, ma
     r = _pipeline(base_config, airtable=at).process_email(make_email(message_id="m2"))
     assert r.is_upgrade is True
     assert r.should_reply is True
+
+
+def test_pipeline_error_is_never_match_ready(base_config, make_email):
+    at = FakeAirtable()
+    at.fail_on = "upsert_lead"
+    r = _pipeline(base_config, airtable=at, alerter=FakeAlerter()).process_email(make_email(message_id="m1"))
+    assert r.status == LeadStatus.MANUAL_REVIEW
+    assert r.match_request is None
+    assert r.to_dict()["match"] == {"ready": False, "missing_fields": [], "request": None}
+    assert at.messages["m1"]["Match Ready"] is False
+
+
+def test_matched_legacy_row_is_not_asked_for_zip(base_config, make_email):
+    at = FakeAirtable()
+    _seed_legacy_tier1(at, make_email)
+    at.leads["sarah@example.com"][1]["Status"] = "Matched"
+    r = _pipeline(base_config, ai=FakeAI(lead=ExtractedLead(bedrooms=2)), airtable=at).process_email(make_email(message_id="m2"))
+    assert r.should_reply is False
+    assert r.reply_skip_reason == "follow_up"
+    assert r.is_upgrade is False
+    assert at.leads["sarah@example.com"][1]["Status"] == "Matched"
+    assert at.leads["sarah@example.com"][1]["Reply Count"] == 1

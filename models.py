@@ -160,10 +160,15 @@ class PipelineResult:
 
     @property
     def match_ready(self) -> bool:
+        # Failed runs clear match_request and must never look match-ready to n8n.
+        if self.error:
+            return False
         return self.extracted is not None and self.extracted.has_gate_fields
 
     @property
     def match_missing_fields(self) -> list:
+        if self.error:
+            return []
         return self.extracted.missing_gate_fields if self.extracted else []
 
     def to_dict(self) -> dict:

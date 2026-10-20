@@ -93,7 +93,10 @@ FIELDS:
   pets                e.g. ["1 dog", "2 cats"] or [] for "no pets"
   pet_count           Total number of pets, if stated
   pet_details         One entry per pet: {"type": "Dog"|"Cat"|"Other", "description": weight/breed text or null}
-  pet_friendly_required   Only true if EXPLICITLY required
+  pet_friendly_required   true when the renter has pets (non-empty pets / pet_count > 0 /
+                          non-empty pet_details), or when they explicitly require pet-friendly;
+                          null when pets are not mentioned; false only for explicit "no pets"
+                          with no pet-friendly ask
   garage_required     true only if a garage is explicitly required
   garage_spaces       Number of garage spaces requested
   amenities           Requested amenities, ONLY from this list, spelled exactly:
@@ -152,12 +155,16 @@ Occupants:
   Not mentioned → null for all three
 
 Pets:
-  "I have a dog" → pets: ["1 dog"], pet_count: 1, pet_details: [{"type": "Dog", "description": null}]
+  "I have a dog" → pets: ["1 dog"], pet_count: 1, pet_details: [{"type": "Dog", "description": null}],
+      pet_friendly_required: true
   "two cats and a 40 lb lab" → pets: ["2 cats", "1 dog"], pet_count: 3,
-      pet_details: [{"type": "Cat", "description": null}, {"type": "Cat", "description": null}, {"type": "Dog", "description": "40 lb lab"}]
-  "no pets" → pets: [], pet_count: 0, pet_details: []
-  "I have pets" (vague) → pets: ["pets (unspecified)"], pet_count: null, pet_details: null
-  Not mentioned → null for all three
+      pet_details: [{"type": "Cat", "description": null}, {"type": "Cat", "description": null}, {"type": "Dog", "description": "40 lb lab"}],
+      pet_friendly_required: true
+  "no pets" → pets: [], pet_count: 0, pet_details: [], pet_friendly_required: false
+  "I have pets" (vague) → pets: ["pets (unspecified)"], pet_count: null, pet_details: null,
+      pet_friendly_required: true
+  "must be pet friendly" (no pets listed) → pets: null, pet_friendly_required: true
+  Not mentioned → null for pets, pet_count, pet_details, and pet_friendly_required
 
 Amenities:
   "needs a pool" → ["Pool"]; "furnished" → ["Furnished"]; "one story" → ["Single story"]
@@ -255,8 +262,8 @@ PROMPTS = {
         "user_template": JUNK_FILTER_USER_TEMPLATE,
     },
     "extraction": {
-        "version": "2.0.0",
-        "last_updated": "2026-10-13",
+        "version": "2.1.0",
+        "last_updated": "2026-10-19",
         "system_prompt": EXTRACTION_SYSTEM_PROMPT,
         "user_template": EXTRACTION_USER_TEMPLATE,
         "json_schema": EXTRACTION_JSON_SCHEMA,
@@ -342,8 +349,9 @@ def coerce_extraction(data: dict) -> dict:
         out[f] = _to_float(out[f])
     for f in ("pet_friendly_required", "garage_required"):
         out[f] = _to_bool(out[f])
-    for f in ("location", "move_in_date", "notes", "phone", "special_requests", "company_name"):
+    for f in ("location", "notes", "phone", "special_requests", "company_name"):
         out[f] = _to_str(out[f])
+    out["move_in_date"] = _to_move_in_date(out["move_in_date"])
 
     conf = _to_float(out["confidence"])
     out["confidence"] = min(max(conf, 0.0), 1.0) if conf is not None else 0.0
@@ -369,7 +377,37 @@ def coerce_extraction(data: dict) -> dict:
     # A bare 5-digit location is a zip the model did not copy across.
     out["zip_code"] = _to_zip(out["zip_code"]) or _to_zip(out["location"])
 
+    # Having pets implies the unit must accept them — never leave this null/false.
+    if _extraction_has_pets(out):
+        out["pet_friendly_required"] = True
+
     return out
+
+
+def _to_move_in_date(value) -> Optional[str]:
+    """ASAP (any case) or YYYY-MM-DD; anything else becomes null."""
+    text = _to_str(value)
+    if text is None:
+        return None
+    if text.casefold() == "asap":
+        return "ASAP"
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", text):
+        return text
+    return None
+
+
+def _extraction_has_pets(data: dict) -> bool:
+    """True when extraction indicates the renter has at least one pet."""
+    pets = data.get("pets")
+    if isinstance(pets, list) and len(pets) > 0:
+        return True
+    pet_count = data.get("pet_count")
+    if pet_count is not None and pet_count > 0:
+        return True
+    pet_details = data.get("pet_details")
+    if isinstance(pet_details, list) and len(pet_details) > 0:
+        return True
+    return False
 
 
 def _strip_fences(text: str) -> str:

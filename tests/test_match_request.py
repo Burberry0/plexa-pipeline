@@ -149,3 +149,11 @@ def test_name_from_last_first_and_empty_sender(make_email):
     assert body["q2_q2_fullname0"] == {"first": "Sarah", "last": "Johnson"}
     body = build_match_request(ExtractedLead(**GATES), make_email(sender_name=""), today=TODAY)
     assert body["q2_q2_fullname0"] == {"first": "", "last": ""}
+
+
+def test_pet_weight_is_not_read_as_a_count(make_email):
+    body = build_match_request(ExtractedLead(**GATES, pets=["40 lb lab"]), make_email(), today=TODAY)
+    assert body["q22_pets"] == "Yes"
+    assert body["q35_petQuantity"] == "1"
+    assert body["q23_petType"] == "Other"
+    assert body["q28_dogWeight28"] == "40 lb lab"

@@ -103,6 +103,22 @@ def test_merge_explicit_no_pets_overrides_prior_pets():
     assert merged.pets == []
 
 
+def test_merge_forces_pet_friendly_when_pets_present():
+    merged = merge_leads(
+        ExtractedLead(pets=["1 small dog"], pet_friendly_required=None),
+        ExtractedLead(bedrooms=2),
+    )
+    assert merged.pets == ["1 small dog"]
+    assert merged.pet_friendly_required is True
+
+    # New extraction brings pets but leaves the flag null
+    merged = merge_leads(
+        ExtractedLead(),
+        ExtractedLead(pets=["1 dog"], pet_friendly_required=None),
+    )
+    assert merged.pet_friendly_required is True
+
+
 def test_merge_recomputes_missing_fields():
     prior = ExtractedLead(location="Henderson")
     new = ExtractedLead(bedrooms=2, missing_fields=["location", "budget_max"])
