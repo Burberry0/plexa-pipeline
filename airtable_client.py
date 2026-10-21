@@ -7,7 +7,7 @@ import json
 import logging
 import time
 from dataclasses import asdict, dataclass
-from typing import Optional
+from typing import Literal, Optional
 from urllib.parse import quote
 
 import requests
@@ -22,11 +22,25 @@ REQUEST_TIMEOUT = 15
 RETRY_STATUSES = (429, 503)
 RETRY_DELAY_SECONDS = 1.0
 
+# Partners.Status values that still count as a known partner for enrichment.
+_ACTIVE_PARTNER_STATUSES = frozenset({"Active", ""})
+
 
 @dataclass
 class LeadRecord:
     record_id: str
     fields: dict
+
+
+@dataclass(frozen=True)
+class PartnerMatch:
+    """A row from Partners used to tag a Lead on ingest."""
+    email: str
+    inventory_tier: Optional[str] = None  # Full | Snap
+    vendor: Optional[str] = None
+    company_name: Optional[str] = None
+    status: Optional[str] = None
+    matched_by: Literal["email", "domain"] = "email"
 
 
 def iso_utc(dt) -> str:
@@ -35,6 +49,50 @@ def iso_utc(dt) -> str:
 
 def _escape_formula_string(value: str) -> str:
     return value.replace("\\", "\\\\").replace("'", "\\'")
+
+
+def email_domain(sender_email: str) -> Optional[str]:
+    text = (sender_email or "").strip().lower()
+    if "@" not in text:
+        return None
+    domain = text.rsplit("@", 1)[-1].strip()
+    return domain or None
+
+
+def partner_from_fields(fields: dict, matched_by: Literal["email", "domain"]) -> Optional[PartnerMatch]:
+    """Build a PartnerMatch from an Airtable Partners row; skip inactive / DNC."""
+    status = (fields.get("Status") or "").strip()
+    if status and status not in _ACTIVE_PARTNER_STATUSES:
+        return None
+    email = (fields.get("Email") or "").strip().lower()
+
+    def _opt(key: str) -> Optional[str]:
+        val = fields.get(key)
+        if val is None:
+            return None
+        text = str(val).strip()
+        return text or None
+
+    return PartnerMatch(
+        email=email,
+        inventory_tier=_opt("Inventory Tier"),
+        vendor=_opt("Vendor"),
+        company_name=_opt("Company Name"),
+        status=status or "Active",
+        matched_by=matched_by,
+    )
+
+
+def partner_to_lead_fields(partner: Optional[PartnerMatch]) -> dict:
+    """Denormalized Partner columns written onto the Leads upsert."""
+    if partner is None:
+        return {"Known Partner": False}
+    fields = {"Known Partner": True}
+    if partner.inventory_tier:
+        fields["Partner Tier"] = partner.inventory_tier
+    if partner.vendor:
+        fields["Vendor"] = partner.vendor
+    return fields
 
 
 class AirtableClient:
@@ -47,6 +105,7 @@ class AirtableClient:
         }
         self._leads = config.airtable_leads_table
         self._messages = config.airtable_messages_table
+        self._partners = config.airtable_partners_table
 
     def _request(self, method: str, table: str, path: str = "", **kwargs) -> dict:
         url = f"{self._base}/{quote(table)}{path}"
@@ -93,6 +152,48 @@ class AirtableClient:
     def log_message(self, fields: dict) -> str:
         data = self._request("POST", self._messages, json={"fields": fields, "typecast": True})
         return data["id"]
+
+    # ── Partners ─────────────────────────────────────────────────────────
+
+    def find_partner(self, sender_email: str) -> Optional[PartnerMatch]:
+        """Look up Partners by exact Email, then by Domain. Active rows only.
+
+        Failures are logged and return None so a missing Partners table never
+        takes down ingest — Leads simply get Known Partner = false.
+        """
+        email = (sender_email or "").strip().lower()
+        if not email:
+            return None
+        try:
+            by_email = self._find_partner_records(
+                f"LOWER({{Email}})='{_escape_formula_string(email)}'"
+            )
+            for fields in by_email:
+                hit = partner_from_fields(fields, "email")
+                if hit is not None:
+                    return hit
+
+            domain = email_domain(email)
+            if not domain:
+                return None
+            by_domain = self._find_partner_records(
+                f"LOWER({{Domain}})='{_escape_formula_string(domain)}'"
+            )
+            for fields in by_domain:
+                hit = partner_from_fields(fields, "domain")
+                if hit is not None:
+                    return hit
+        except Exception as e:  # noqa: BLE001 — enrichment must not fail ingest
+            logger.warning(f"Partners lookup failed for {email}: {e}")
+        return None
+
+    def _find_partner_records(self, formula: str) -> list:
+        data = self._request(
+            "GET",
+            self._partners,
+            params={"filterByFormula": formula, "maxRecords": 5},
+        )
+        return [r.get("fields", {}) for r in data.get("records", [])]
 
 
 # ── Field mapping ───────────────────────────────────────────────────────────

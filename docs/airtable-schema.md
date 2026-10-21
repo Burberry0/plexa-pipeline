@@ -10,9 +10,12 @@ Zip Code, Phone, Bathrooms, Adults, Children, Amenities, Special Requests,
 Match Ready on Leads; Match Ready on Messages.
 
 `Partners` is CRM / inventory-tier storage. It is not an ingest allowlist
-(unknown senders are still processed). Lookup is by Email (exact), with Domain
-as fallback. The pipeline does not require Partners columns to exist for
-`/ingest` to succeed until partner enrichment is wired.
+(unknown senders are still processed). On every LEAD upsert the service looks
+up Partners by Email (exact), then Domain, and stamps denormalized columns on
+Leads (`Known Partner`, `Partner Tier`, `Vendor`). Only `Active` (or blank
+Status) rows count; `Inactive` / `Do Not Contact` are ignored. A Partners
+lookup failure is logged and treated as unknown — it does not fail ingest.
+The three Leads partner columns below must exist or Airtable returns 422.
 
 ## Table: Leads (one record per sender email)
 
@@ -39,6 +42,9 @@ The service upserts with `fieldsToMergeOn: ["Email"]`, so Email must stay the pr
 | Amenities | Long text | Comma-joined JotForm labels, e.g. "Pool, Yard" |
 | Special Requests | Long text | Renter-stated needs (Section 8, ADA, …) |
 | Match Ready | Checkbox | True when zip, bedrooms and move-in are all known; written on every upsert |
+| Known Partner | Checkbox | True when sender matched an Active Partners row (email or domain) |
+| Partner Tier | Single select | Options: `Full`, `Snap`. Copied from Partners.`Inventory Tier` when known; omitted when unknown |
+| Vendor | Single select | Options: `ALE`, `Corpay`, `CRS`, `Sedgwick`, `Primus`, `Alacrity`, `TPS`, `Arrow ALE`, `Catale`, `Other`. Copied from Partners when known; omitted when unknown |
 | Confidence | Number (2 decimals) | |
 | Notes | Long text | |
 | Tier | Single select | Options: `Tier 1`, `Tier 2`, `Tier 3` |

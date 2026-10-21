@@ -15,6 +15,7 @@ from airtable_client import (
     iso_utc,
     lead_from_record,
     lead_to_airtable_fields,
+    partner_to_lead_fields,
     tier_from_record,
 )
 from alerts import send_alert
@@ -47,7 +48,8 @@ class Pipeline:
          fields) also gets a readable `match_request` for n8n to POST to
          the property-matching workflow once a human approves in Slack
       5. Reply decision (guardrails) + reply rendering
-      6. Airtable upsert (all tiers) + message log
+      6. Partners lookup (email, then domain) stamped onto the Lead + response
+      7. Airtable upsert (all tiers) + message log
 
     The prior tier is the *effective* one: the stored extraction re-classified
     under the current gate, falling back to the Tier column only when the
@@ -158,9 +160,24 @@ class Pipeline:
             result.should_reply = decision.should_reply
             result.reply_skip_reason = decision.reason
 
-            # ── 6. Upsert ─────────────────────────────────────────────
+            # ── 6. Partners enrichment ────────────────────────────────
+            partner = airtable.find_partner(email.sender_email) if airtable else None
+            if partner is not None:
+                result.partner_known = True
+                result.partner_inventory_tier = partner.inventory_tier
+                result.partner_vendor = partner.vendor
+                result.partner_matched_by = partner.matched_by
+                logger.info(
+                    f"Partner hit — {partner.matched_by} | tier={partner.inventory_tier} | "
+                    f"vendor={partner.vendor} | from={email.sender_email}"
+                )
+            else:
+                result.partner_known = False
+
+            # ── 7. Upsert ─────────────────────────────────────────────
             if airtable:
                 fields = lead_to_airtable_fields(extracted, tier, result.status, email)
+                fields.update(partner_to_lead_fields(partner))
                 if human_status and not result.is_upgrade:
                     fields.pop("Status", None)  # keep a human-set status (e.g. Matched)
                 if decision.should_reply:

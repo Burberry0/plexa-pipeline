@@ -27,6 +27,8 @@ class FakeAirtable:
     def __init__(self):
         self.leads = {}       # email -> (record_id, fields)
         self.messages = {}    # message_id -> fields
+        self.partners = {}    # email -> Partners fields (exact match)
+        self.partners_by_domain = {}  # domain -> Partners fields (fallback)
         self.fail_on = None   # method name to raise HTTPError from
         self._n = 0
 
@@ -59,6 +61,18 @@ class FakeAirtable:
         self._maybe_fail("log_message")
         self.messages[fields.get("Message ID") or f"anon-{len(self.messages)}"] = fields
         return "recMsg"
+
+    def find_partner(self, sender_email):
+        from airtable_client import email_domain, partner_from_fields
+
+        self._maybe_fail("find_partner")
+        key = (sender_email or "").strip().lower()
+        if key in self.partners:
+            return partner_from_fields(self.partners[key], "email")
+        domain = email_domain(key)
+        if domain and domain in self.partners_by_domain:
+            return partner_from_fields(self.partners_by_domain[domain], "domain")
+        return None
 
 
 class FakeAlerter:

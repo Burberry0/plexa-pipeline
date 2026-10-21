@@ -44,6 +44,7 @@ class PipelineConfig:
     airtable_base_id: str = ""
     airtable_leads_table: str = "Leads"
     airtable_messages_table: str = "Messages"
+    airtable_partners_table: str = "Partners"
 
     # Auto-reply guardrails
     auto_reply_enabled: bool = False
@@ -90,6 +91,7 @@ class PipelineConfig:
             airtable_base_id=os.getenv("AIRTABLE_BASE_ID", ""),
             airtable_leads_table=os.getenv("AIRTABLE_LEADS_TABLE", "Leads"),
             airtable_messages_table=os.getenv("AIRTABLE_MESSAGES_TABLE", "Messages"),
+            airtable_partners_table=os.getenv("AIRTABLE_PARTNERS_TABLE", "Partners"),
             auto_reply_enabled=_env_bool("AUTO_REPLY_ENABLED", False),
             max_auto_replies=int(os.getenv("MAX_AUTO_REPLIES", "2")),
             reply_cooldown_minutes=int(os.getenv("REPLY_COOLDOWN_MINUTES", "5")),

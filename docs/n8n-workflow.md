@@ -17,6 +17,7 @@ From `POST /ingest` (the full `PipelineResult.to_dict()`):
 | `match.missing_fields` (list) | nodes 3b and 5a log text |
 | `match.request` (object or null) | node 6e body: readable match fields (`zip_code`, `bedrooms`, `email`, …) for the matching workflow's Webhook node |
 | `extraction.*` | node 3b log text (now includes `zip_code`, `bathrooms`, `amenities`, `phone`, `requester_type`) |
+| `partner.known`, `partner.inventory_tier`, `partner.vendor`, `partner.matched_by` | Slack log / approval triage (known Full/Snap partner vs unknown sender) |
 
 `match` is present on every response (JUNK, duplicate and error responses carry
 `{ready: false, missing_fields: [], request: null}`), so node 6d never sees `undefined`.

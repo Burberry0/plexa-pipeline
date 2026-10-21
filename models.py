@@ -143,6 +143,11 @@ class PipelineResult:
     should_reply: bool = False
     reply_skip_reason: Optional[str] = None
     match_request: Optional[dict] = None  # Readable match body; set only when match-ready
+    # Partner enrichment from Airtable Partners (email, then domain). Always set for LEADs.
+    partner_known: bool = False
+    partner_inventory_tier: Optional[str] = None  # Full | Snap
+    partner_vendor: Optional[str] = None
+    partner_matched_by: Optional[str] = None  # email | domain
     error: Optional[str] = None
     processing_time_ms: float = 0.0
 
@@ -210,6 +215,13 @@ class PipelineResult:
             "ready": self.match_ready,
             "missing_fields": self.match_missing_fields,
             "request": self.match_request if self.match_ready else None,
+        }
+        # Always present so n8n Slack logs can branch without undefined checks.
+        result["partner"] = {
+            "known": self.partner_known,
+            "inventory_tier": self.partner_inventory_tier,
+            "vendor": self.partner_vendor,
+            "matched_by": self.partner_matched_by,
         }
         if self.airtable_record_id:
             result["airtable_record_id"] = self.airtable_record_id

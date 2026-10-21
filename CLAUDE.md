@@ -41,8 +41,12 @@ A stateless decision engine for Plexa Housing's rental-inquiry inbox: one email 
 ```
 dedupe on message_id → junk filter → extraction → merge over prior Leads row
 → tier + upgrade detection → match_request (if match-ready) → reply decision + render
-→ Leads upsert + Messages log
+→ Partners lookup (email, then domain) → Leads upsert + Messages log
 ```
+Partner enrichment stamps `Known Partner` / `Partner Tier` / `Vendor` on Leads and
+emits `partner: {known, inventory_tier, vendor, matched_by}` on every `/ingest`
+response. Unknown senders still process; Inactive/DNC Partners rows are ignored.
+Lookup failures are logged and treated as unknown (ingest continues).
 
 Rules that span several files and are easy to break:
 
