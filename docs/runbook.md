@@ -76,7 +76,8 @@ that is a workflow change (bypass nodes 5a–5c) and a new sign-off, not a flag.
 To confirm the send path works end to end: send one real test inquiry from a
 personal address (with a ZIP, bedrooms and a move-in date), click `Approve &
 send` on the Slack message, and confirm the reply lands in-thread, the
-`:house:` match log appears in Slack, and a row appears in the Requests table
+logger posts `🟢 Green · Plexa Intake · match` (*Reply sent …; match request
+handed to Property Matching*), and a row appears in the Requests table
 of the matching base. Watch `Reply Count` on the Leads row increment to 1.
 
 ## Kill switch
@@ -84,7 +85,8 @@ of the matching base. Watch `Reply Count` on the Leads row increment to 1.
 Two levels:
 
 - **Soft:** stop clicking Approve. Requests time out after 24 hours and are
-  labeled Processed with a "declined" note in Slack. Nothing is sent.
+  labeled Processed with a Yellow *nobody approved within 24 h* message from
+  the logger. Nothing is sent.
 - **Hard:** set `AUTO_REPLY_ENABLED=false` and redeploy. The service never
   decides to reply, so the approval step is never reached. Classification and
   Airtable writes continue.

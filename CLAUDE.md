@@ -78,4 +78,5 @@ Everything comes from env vars through `PipelineConfig.from_env()`, which also l
 
 - `docs/runbook.md`: deploy, smoke test, shadow run, go-live gate, kill switch, failure table.
 - `docs/n8n-workflow.md`, `docs/monitoring.md`: node-by-node n8n specs; node names are referenced by other nodes, so renaming one breaks the workflow.
+- `n8n/intake-logging/`: generates the root `Plexa Intake.json` from `workflow/Plexa-Intake.before.json`, adding the Slack-logger stage reports (`node --test n8n/intake-logging/logging.test.js`). The logger itself lives in `RyanPlexa/n8n-logger/`.
 - `docs/superpowers/specs/` and `docs/superpowers/plans/`: the design decisions and the task-by-task plans this branch implemented.

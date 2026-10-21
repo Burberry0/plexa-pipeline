@@ -1,0 +1,476 @@
+{
+  "tier1": {
+    "sender": "Jane Doe <jane@example.com>",
+    "subject": "Looking for a 2BR in Henderson",
+    "email": {
+      "sender_email": "jane@example.com",
+      "sender_name": "Jane Doe",
+      "subject": "Looking for a 2BR in Henderson",
+      "message_id": "msg-1",
+      "thread_id": "thr-1"
+    },
+    "classification": "LEAD",
+    "is_duplicate": false,
+    "is_upgrade": false,
+    "processing_time_ms": 0.1,
+    "tokens": {
+      "junk_filter": 10,
+      "extraction": 100,
+      "total": 110
+    },
+    "extraction": {
+      "location": "Henderson",
+      "bedrooms": 2,
+      "budget_min": null,
+      "budget_max": 1800.0,
+      "move_in_date": "ASAP",
+      "pets": null,
+      "occupants": null,
+      "duration_months": null,
+      "pet_friendly_required": null,
+      "zip_code": "89052",
+      "phone": null,
+      "bathrooms": null,
+      "square_feet": null,
+      "adults": null,
+      "children": null,
+      "pet_count": null,
+      "pet_details": null,
+      "garage_required": null,
+      "garage_spaces": null,
+      "amenities": null,
+      "special_requests": null,
+      "requester_type": null,
+      "company_name": null,
+      "confidence": 0.9,
+      "missing_fields": [],
+      "notes": null
+    },
+    "tier": "Tier 1",
+    "status": "New",
+    "reply": {
+      "should_send": true,
+      "skip_reason": "ok",
+      "subject": "Re: Looking for a 2BR in Henderson",
+      "html": "\n    <div style=\"max-width:600px; margin:0 auto; font-family:Arial,sans-serif;\">\n      \n<div style=\"background-color:#1a365d; padding:20px 30px; border-radius:8px 8px 0 0;\">\n  <h1 style=\"color:#ffffff; margin:0; font-family:Arial,sans-serif; font-size:22px;\">\n    Plexa Housing\n  </h1>\n  <p style=\"color:#a0c4ff; margin:4px 0 0; font-family:Arial,sans-serif; font-size:13px;\">\n    Las Vegas Property Management\n  </p>\n</div>\n\n      <div style=\"padding:24px 30px; background:#ffffff;\">\n        \n    <p style=\"color:#334155; line-height:1.6;\">Hi Jane,</p>\n    <p style=\"color:#334155; line-height:1.6;\">\n      Thanks for reaching out! We've got everything we need to start looking for the right place for you.\n      Here's what we picked up from your message:\n    </p>\n    \n    <table style=\"width:100%; border-collapse:collapse; background:#f8fafc; border-radius:6px; margin:16px 0;\">\n      <thead><tr><td colspan=\"2\" style=\"padding:10px 12px; font-weight:bold; color:#1a365d; border-bottom:1px solid #e2e8f0;\">\n        What We Heard\n      </td></tr></thead>\n      <tbody><tr><td style=\"padding:6px 12px; color:#64748b; font-size:13px;\">Location</td><td style=\"padding:6px 12px; font-weight:bold; font-size:13px;\">Henderson</td></tr><tr><td style=\"padding:6px 12px; color:#64748b; font-size:13px;\">Zip Code</td><td style=\"padding:6px 12px; font-weight:bold; font-size:13px;\">89052</td></tr><tr><td style=\"padding:6px 12px; color:#64748b; font-size:13px;\">Bedrooms</td><td style=\"padding:6px 12px; font-weight:bold; font-size:13px;\">2</td></tr><tr><td style=\"padding:6px 12px; color:#64748b; font-size:13px;\">Budget</td><td style=\"padding:6px 12px; font-weight:bold; font-size:13px;\">Up to $1,800/mo</td></tr><tr><td style=\"padding:6px 12px; color:#64748b; font-size:13px;\">Move-in Date</td><td style=\"padding:6px 12px; font-weight:bold; font-size:13px;\">ASAP</td></tr></tbody>\n    </table>\n    \n    <p style=\"color:#334155; line-height:1.6;\">\n      We're already running a match against our available properties. You'll hear back from us shortly\n      with options that fit your criteria.\n    </p>\n    <p style=\"color:#334155; line-height:1.6;\">Talk soon,<br><strong>Ryan</strong><br>Plexa Housing</p>\n    \n      </div>\n      \n<div style=\"background-color:#f0f4f8; padding:16px 30px; border-radius:0 0 8px 8px; border-top:1px solid #e2e8f0;\">\n  <p style=\"color:#64748b; font-family:Arial,sans-serif; font-size:12px; margin:0;\">\n    Plexa Housing \u00b7 Las Vegas, NV<br>\n    This is an automated message. Reply to this email and a team member will follow up.\n  </p>\n</div>\n\n    </div>\n    "
+    },
+    "match": {
+      "ready": true,
+      "missing_fields": [],
+      "request": {
+        "first_name": "Jane",
+        "last_name": "Doe",
+        "email": "jane@example.com",
+        "phone": "",
+        "requester_type": "",
+        "company_holds_lease": "",
+        "connecting_client_directly": "",
+        "company_name": "",
+        "adults": "",
+        "children": "",
+        "zip_code": "89052",
+        "lease_length": "",
+        "move_in_date": "2026-10-20",
+        "bedrooms": "2",
+        "bathrooms": "",
+        "square_feet": "",
+        "garage_required": "",
+        "garage_spaces": "",
+        "pets": "",
+        "pet_quantity": "",
+        "pet_type": "",
+        "pet_description": "",
+        "special_requests": "",
+        "amenities": [],
+        "source": "email",
+        "message_id": "msg-1",
+        "thread_id": "thr-1"
+      }
+    },
+    "partner": {
+      "known": false,
+      "inventory_tier": null,
+      "vendor": null,
+      "matched_by": null
+    },
+    "airtable_record_id": "rec1"
+  },
+  "tier3": {
+    "sender": "Jane Doe <jane@example.com>",
+    "subject": "Looking for a 2BR in Henderson",
+    "email": {
+      "sender_email": "jane@example.com",
+      "sender_name": "Jane Doe",
+      "subject": "Looking for a 2BR in Henderson",
+      "message_id": "msg-2",
+      "thread_id": "thr-1"
+    },
+    "classification": "LEAD",
+    "is_duplicate": false,
+    "is_upgrade": false,
+    "processing_time_ms": 0.1,
+    "tokens": {
+      "junk_filter": 10,
+      "extraction": 100,
+      "total": 110
+    },
+    "extraction": {
+      "location": "Las Vegas",
+      "bedrooms": 1,
+      "budget_min": null,
+      "budget_max": null,
+      "move_in_date": null,
+      "pets": null,
+      "occupants": null,
+      "duration_months": null,
+      "pet_friendly_required": null,
+      "zip_code": null,
+      "phone": null,
+      "bathrooms": null,
+      "square_feet": null,
+      "adults": null,
+      "children": null,
+      "pet_count": null,
+      "pet_details": null,
+      "garage_required": null,
+      "garage_spaces": null,
+      "amenities": null,
+      "special_requests": null,
+      "requester_type": null,
+      "company_name": null,
+      "confidence": 0.6,
+      "missing_fields": [],
+      "notes": null
+    },
+    "tier": "Tier 3",
+    "status": "On Hold",
+    "reply": {
+      "should_send": true,
+      "skip_reason": "ok",
+      "subject": "Re: Looking for a 2BR in Henderson",
+      "html": "\n    <div style=\"max-width:600px; margin:0 auto; font-family:Arial,sans-serif;\">\n      \n<div style=\"background-color:#1a365d; padding:20px 30px; border-radius:8px 8px 0 0;\">\n  <h1 style=\"color:#ffffff; margin:0; font-family:Arial,sans-serif; font-size:22px;\">\n    Plexa Housing\n  </h1>\n  <p style=\"color:#a0c4ff; margin:4px 0 0; font-family:Arial,sans-serif; font-size:13px;\">\n    Las Vegas Property Management\n  </p>\n</div>\n\n      <div style=\"padding:24px 30px; background:#ffffff;\">\n        \n    <p style=\"color:#334155; line-height:1.6;\">Hi Jane,</p>\n    <p style=\"color:#334155; line-height:1.6;\">\n      Thanks for reaching out to Plexa Housing! We'd love to help you find the right rental.\n    </p>\n    <p style=\"color:#334155; line-height:1.6;\">\n      To get started on a search, we just need a few details:\n    </p>\n    \n    <div style=\"background:#fffbeb; border-left:4px solid #f59e0b; padding:12px 16px; margin:16px 0; border-radius:0 6px 6px 0;\">\n      <p style=\"margin:0 0 8px; font-weight:bold; color:#92400e;\">Quick question(s) to help us match you faster:</p>\n      <ul style=\"margin:0; padding-left:20px;\"><li style=\"margin:6px 0; color:#334155;\">You mentioned Las Vegas \u2014 which ZIP code (or a couple of ZIP codes) should we search in?</li><li style=\"margin:6px 0; color:#334155;\">When are you looking to move in? (A date or &quot;ASAP&quot; both work.)</li></ul>\n    </div>\n    \n    <p style=\"color:#334155; line-height:1.6;\">\n      Just hit reply with those details and we'll start matching you right away.\n    </p>\n    <p style=\"color:#334155; line-height:1.6;\">Thanks!<br><strong>Ryan</strong><br>Plexa Housing</p>\n    \n      </div>\n      \n<div style=\"background-color:#f0f4f8; padding:16px 30px; border-radius:0 0 8px 8px; border-top:1px solid #e2e8f0;\">\n  <p style=\"color:#64748b; font-family:Arial,sans-serif; font-size:12px; margin:0;\">\n    Plexa Housing \u00b7 Las Vegas, NV<br>\n    This is an automated message. Reply to this email and a team member will follow up.\n  </p>\n</div>\n\n    </div>\n    "
+    },
+    "match": {
+      "ready": false,
+      "missing_fields": [
+        "zip_code",
+        "move_in_date"
+      ],
+      "request": null
+    },
+    "partner": {
+      "known": false,
+      "inventory_tier": null,
+      "vendor": null,
+      "matched_by": null
+    },
+    "airtable_record_id": "rec1"
+  },
+  "junk": {
+    "sender": " <promo@spam.io>",
+    "subject": "50% off",
+    "email": {
+      "sender_email": "promo@spam.io",
+      "sender_name": "",
+      "subject": "50% off",
+      "message_id": "msg-3",
+      "thread_id": "thr-1"
+    },
+    "classification": "JUNK",
+    "is_duplicate": false,
+    "is_upgrade": false,
+    "processing_time_ms": 0.0,
+    "tokens": {
+      "junk_filter": 10,
+      "extraction": 0,
+      "total": 10
+    },
+    "status": "New",
+    "reply": {
+      "should_send": false,
+      "skip_reason": "junk",
+      "subject": null,
+      "html": null
+    },
+    "match": {
+      "ready": false,
+      "missing_fields": [],
+      "request": null
+    },
+    "partner": {
+      "known": false,
+      "inventory_tier": null,
+      "vendor": null,
+      "matched_by": null
+    }
+  },
+  "duplicate": {
+    "sender": "Jane Doe <jane@example.com>",
+    "subject": "Looking for a 2BR in Henderson",
+    "email": {
+      "sender_email": "jane@example.com",
+      "sender_name": "Jane Doe",
+      "subject": "Looking for a 2BR in Henderson",
+      "message_id": "msg-4",
+      "thread_id": "thr-1"
+    },
+    "classification": "JUNK",
+    "is_duplicate": true,
+    "is_upgrade": false,
+    "processing_time_ms": 0.0,
+    "tokens": {
+      "junk_filter": 0,
+      "extraction": 0,
+      "total": 0
+    },
+    "status": "New",
+    "reply": {
+      "should_send": false,
+      "skip_reason": "duplicate",
+      "subject": null,
+      "html": null
+    },
+    "match": {
+      "ready": false,
+      "missing_fields": [],
+      "request": null
+    },
+    "partner": {
+      "known": false,
+      "inventory_tier": null,
+      "vendor": null,
+      "matched_by": null
+    }
+  },
+  "manual_review": {
+    "sender": "Jane Doe <jane@example.com>",
+    "subject": "Looking for a 2BR in Henderson",
+    "email": {
+      "sender_email": "jane@example.com",
+      "sender_name": "Jane Doe",
+      "subject": "Looking for a 2BR in Henderson",
+      "message_id": "msg-5",
+      "thread_id": "thr-1"
+    },
+    "classification": "LEAD",
+    "is_duplicate": false,
+    "is_upgrade": false,
+    "processing_time_ms": 1.0,
+    "tokens": {
+      "junk_filter": 10,
+      "extraction": 0,
+      "total": 10
+    },
+    "status": "Manual Review",
+    "reply": {
+      "should_send": false,
+      "skip_reason": "pipeline_error",
+      "subject": null,
+      "html": null
+    },
+    "match": {
+      "ready": false,
+      "missing_fields": [],
+      "request": null
+    },
+    "partner": {
+      "known": false,
+      "inventory_tier": null,
+      "vendor": null,
+      "matched_by": null
+    },
+    "error": "OpenCode 503"
+  },
+  "follow_up": {
+    "sender": "Jane Doe <jane@example.com>",
+    "subject": "Re: Looking for a 2BR in Henderson",
+    "email": {
+      "sender_email": "jane@example.com",
+      "sender_name": "Jane Doe",
+      "subject": "Re: Looking for a 2BR in Henderson",
+      "message_id": "msg-7",
+      "thread_id": "thr-1"
+    },
+    "classification": "LEAD",
+    "is_duplicate": false,
+    "is_upgrade": false,
+    "processing_time_ms": 0.1,
+    "tokens": {
+      "junk_filter": 10,
+      "extraction": 100,
+      "total": 110
+    },
+    "extraction": {
+      "location": "Henderson",
+      "bedrooms": 2,
+      "budget_min": null,
+      "budget_max": 1800.0,
+      "move_in_date": "ASAP",
+      "pets": null,
+      "occupants": null,
+      "duration_months": null,
+      "pet_friendly_required": null,
+      "zip_code": "89052",
+      "phone": null,
+      "bathrooms": null,
+      "square_feet": null,
+      "adults": null,
+      "children": null,
+      "pet_count": null,
+      "pet_details": null,
+      "garage_required": null,
+      "garage_spaces": null,
+      "amenities": null,
+      "special_requests": null,
+      "requester_type": null,
+      "company_name": null,
+      "confidence": 0.9,
+      "missing_fields": [],
+      "notes": null
+    },
+    "tier": "Tier 1",
+    "status": "Needs Review",
+    "reply": {
+      "should_send": false,
+      "skip_reason": "follow_up",
+      "subject": "Re: Looking for a 2BR in Henderson",
+      "html": "\n    <div style=\"max-width:600px; margin:0 auto; font-family:Arial,sans-serif;\">\n      \n<div style=\"background-color:#1a365d; padding:20px 30px; border-radius:8px 8px 0 0;\">\n  <h1 style=\"color:#ffffff; margin:0; font-family:Arial,sans-serif; font-size:22px;\">\n    Plexa Housing\n  </h1>\n  <p style=\"color:#a0c4ff; margin:4px 0 0; font-family:Arial,sans-serif; font-size:13px;\">\n    Las Vegas Property Management\n  </p>\n</div>\n\n      <div style=\"padding:24px 30px; background:#ffffff;\">\n        \n    <p style=\"color:#334155; line-height:1.6;\">Hi Jane,</p>\n    <p style=\"color:#334155; line-height:1.6;\">\n      Thanks for reaching out! We've got everything we need to start looking for the right place for you.\n      Here's what we picked up from your message:\n    </p>\n    \n    <table style=\"width:100%; border-collapse:collapse; background:#f8fafc; border-radius:6px; margin:16px 0;\">\n      <thead><tr><td colspan=\"2\" style=\"padding:10px 12px; font-weight:bold; color:#1a365d; border-bottom:1px solid #e2e8f0;\">\n        What We Heard\n      </td></tr></thead>\n      <tbody><tr><td style=\"padding:6px 12px; color:#64748b; font-size:13px;\">Location</td><td style=\"padding:6px 12px; font-weight:bold; font-size:13px;\">Henderson</td></tr><tr><td style=\"padding:6px 12px; color:#64748b; font-size:13px;\">Zip Code</td><td style=\"padding:6px 12px; font-weight:bold; font-size:13px;\">89052</td></tr><tr><td style=\"padding:6px 12px; color:#64748b; font-size:13px;\">Bedrooms</td><td style=\"padding:6px 12px; font-weight:bold; font-size:13px;\">2</td></tr><tr><td style=\"padding:6px 12px; color:#64748b; font-size:13px;\">Budget</td><td style=\"padding:6px 12px; font-weight:bold; font-size:13px;\">Up to $1,800/mo</td></tr><tr><td style=\"padding:6px 12px; color:#64748b; font-size:13px;\">Move-in Date</td><td style=\"padding:6px 12px; font-weight:bold; font-size:13px;\">ASAP</td></tr></tbody>\n    </table>\n    \n    <p style=\"color:#334155; line-height:1.6;\">\n      We're already running a match against our available properties. You'll hear back from us shortly\n      with options that fit your criteria.\n    </p>\n    <p style=\"color:#334155; line-height:1.6;\">Talk soon,<br><strong>Ryan</strong><br>Plexa Housing</p>\n    \n      </div>\n      \n<div style=\"background-color:#f0f4f8; padding:16px 30px; border-radius:0 0 8px 8px; border-top:1px solid #e2e8f0;\">\n  <p style=\"color:#64748b; font-family:Arial,sans-serif; font-size:12px; margin:0;\">\n    Plexa Housing \u00b7 Las Vegas, NV<br>\n    This is an automated message. Reply to this email and a team member will follow up.\n  </p>\n</div>\n\n    </div>\n    "
+    },
+    "match": {
+      "ready": true,
+      "missing_fields": [],
+      "request": {
+        "first_name": "Jane",
+        "last_name": "Doe",
+        "email": "jane@example.com",
+        "phone": "",
+        "requester_type": "",
+        "company_holds_lease": "",
+        "connecting_client_directly": "",
+        "company_name": "",
+        "adults": "",
+        "children": "",
+        "zip_code": "89052",
+        "lease_length": "",
+        "move_in_date": "2026-10-20",
+        "bedrooms": "2",
+        "bathrooms": "",
+        "square_feet": "",
+        "garage_required": "",
+        "garage_spaces": "",
+        "pets": "",
+        "pet_quantity": "",
+        "pet_type": "",
+        "pet_description": "",
+        "special_requests": "",
+        "amenities": [],
+        "source": "email",
+        "message_id": "msg-7",
+        "thread_id": "thr-1"
+      }
+    },
+    "partner": {
+      "known": false,
+      "inventory_tier": null,
+      "vendor": null,
+      "matched_by": null
+    },
+    "airtable_record_id": "rec1"
+  },
+  "auto_reply_disabled": {
+    "sender": "Jane Doe <jane@example.com>",
+    "subject": "Looking for a 2BR in Henderson",
+    "email": {
+      "sender_email": "jane@example.com",
+      "sender_name": "Jane Doe",
+      "subject": "Looking for a 2BR in Henderson",
+      "message_id": "msg-8",
+      "thread_id": "thr-1"
+    },
+    "classification": "LEAD",
+    "is_duplicate": false,
+    "is_upgrade": false,
+    "processing_time_ms": 0.0,
+    "tokens": {
+      "junk_filter": 10,
+      "extraction": 100,
+      "total": 110
+    },
+    "extraction": {
+      "location": "Henderson",
+      "bedrooms": 2,
+      "budget_min": null,
+      "budget_max": 1800.0,
+      "move_in_date": "ASAP",
+      "pets": null,
+      "occupants": null,
+      "duration_months": null,
+      "pet_friendly_required": null,
+      "zip_code": "89052",
+      "phone": null,
+      "bathrooms": null,
+      "square_feet": null,
+      "adults": null,
+      "children": null,
+      "pet_count": null,
+      "pet_details": null,
+      "garage_required": null,
+      "garage_spaces": null,
+      "amenities": null,
+      "special_requests": null,
+      "requester_type": null,
+      "company_name": null,
+      "confidence": 0.9,
+      "missing_fields": [],
+      "notes": null
+    },
+    "tier": "Tier 1",
+    "status": "New",
+    "reply": {
+      "should_send": false,
+      "skip_reason": "auto_reply_disabled",
+      "subject": "Re: Looking for a 2BR in Henderson",
+      "html": "\n    <div style=\"max-width:600px; margin:0 auto; font-family:Arial,sans-serif;\">\n      \n<div style=\"background-color:#1a365d; padding:20px 30px; border-radius:8px 8px 0 0;\">\n  <h1 style=\"color:#ffffff; margin:0; font-family:Arial,sans-serif; font-size:22px;\">\n    Plexa Housing\n  </h1>\n  <p style=\"color:#a0c4ff; margin:4px 0 0; font-family:Arial,sans-serif; font-size:13px;\">\n    Las Vegas Property Management\n  </p>\n</div>\n\n      <div style=\"padding:24px 30px; background:#ffffff;\">\n        \n    <p style=\"color:#334155; line-height:1.6;\">Hi Jane,</p>\n    <p style=\"color:#334155; line-height:1.6;\">\n      Thanks for reaching out! We've got everything we need to start looking for the right place for you.\n      Here's what we picked up from your message:\n    </p>\n    \n    <table style=\"width:100%; border-collapse:collapse; background:#f8fafc; border-radius:6px; margin:16px 0;\">\n      <thead><tr><td colspan=\"2\" style=\"padding:10px 12px; font-weight:bold; color:#1a365d; border-bottom:1px solid #e2e8f0;\">\n        What We Heard\n      </td></tr></thead>\n      <tbody><tr><td style=\"padding:6px 12px; color:#64748b; font-size:13px;\">Location</td><td style=\"padding:6px 12px; font-weight:bold; font-size:13px;\">Henderson</td></tr><tr><td style=\"padding:6px 12px; color:#64748b; font-size:13px;\">Zip Code</td><td style=\"padding:6px 12px; font-weight:bold; font-size:13px;\">89052</td></tr><tr><td style=\"padding:6px 12px; color:#64748b; font-size:13px;\">Bedrooms</td><td style=\"padding:6px 12px; font-weight:bold; font-size:13px;\">2</td></tr><tr><td style=\"padding:6px 12px; color:#64748b; font-size:13px;\">Budget</td><td style=\"padding:6px 12px; font-weight:bold; font-size:13px;\">Up to $1,800/mo</td></tr><tr><td style=\"padding:6px 12px; color:#64748b; font-size:13px;\">Move-in Date</td><td style=\"padding:6px 12px; font-weight:bold; font-size:13px;\">ASAP</td></tr></tbody>\n    </table>\n    \n    <p style=\"color:#334155; line-height:1.6;\">\n      We're already running a match against our available properties. You'll hear back from us shortly\n      with options that fit your criteria.\n    </p>\n    <p style=\"color:#334155; line-height:1.6;\">Talk soon,<br><strong>Ryan</strong><br>Plexa Housing</p>\n    \n      </div>\n      \n<div style=\"background-color:#f0f4f8; padding:16px 30px; border-radius:0 0 8px 8px; border-top:1px solid #e2e8f0;\">\n  <p style=\"color:#64748b; font-family:Arial,sans-serif; font-size:12px; margin:0;\">\n    Plexa Housing \u00b7 Las Vegas, NV<br>\n    This is an automated message. Reply to this email and a team member will follow up.\n  </p>\n</div>\n\n    </div>\n    "
+    },
+    "match": {
+      "ready": true,
+      "missing_fields": [],
+      "request": {
+        "first_name": "Jane",
+        "last_name": "Doe",
+        "email": "jane@example.com",
+        "phone": "",
+        "requester_type": "",
+        "company_holds_lease": "",
+        "connecting_client_directly": "",
+        "company_name": "",
+        "adults": "",
+        "children": "",
+        "zip_code": "89052",
+        "lease_length": "",
+        "move_in_date": "2026-10-20",
+        "bedrooms": "2",
+        "bathrooms": "",
+        "square_feet": "",
+        "garage_required": "",
+        "garage_spaces": "",
+        "pets": "",
+        "pet_quantity": "",
+        "pet_type": "",
+        "pet_description": "",
+        "special_requests": "",
+        "amenities": [],
+        "source": "email",
+        "message_id": "msg-8",
+        "thread_id": "thr-1"
+      }
+    },
+    "partner": {
+      "known": false,
+      "inventory_tier": null,
+      "vendor": null,
+      "matched_by": null
+    },
+    "airtable_record_id": "rec1"
+  }
+}

@@ -1,0 +1,1120 @@
+{
+  "name": "Plexa Intake",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "simple": false,
+        "filters": {
+          "labelIds": [
+            "INBOX"
+          ],
+          "readStatus": "both"
+        },
+        "options": {
+          "downloadAttachments": false
+        }
+      },
+      "id": "i1",
+      "name": "Gmail Trigger",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "XQNqvnyHEyYX0fBJ",
+          "name": "request@plexa"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "p1",
+              "name": "sender_email",
+              "type": "string",
+              "value": "={{ $json.from.value[0].address }}"
+            },
+            {
+              "id": "p2",
+              "name": "sender_name",
+              "type": "string",
+              "value": "={{ $json.from.value[0].name || '' }}"
+            },
+            {
+              "id": "p3",
+              "name": "subject",
+              "type": "string",
+              "value": "={{ $json.subject || '' }}"
+            },
+            {
+              "id": "p4",
+              "name": "body_html",
+              "type": "string",
+              "value": "={{ $json.html || '' }}"
+            },
+            {
+              "id": "p5",
+              "name": "body_plain",
+              "type": "string",
+              "value": "={{ $json.text || '' }}"
+            },
+            {
+              "id": "p6",
+              "name": "message_id",
+              "type": "string",
+              "value": "={{ $json.id }}"
+            },
+            {
+              "id": "p7",
+              "name": "thread_id",
+              "type": "string",
+              "value": "={{ $json.threadId }}"
+            },
+            {
+              "id": "p8",
+              "name": "is_reply",
+              "type": "boolean",
+              "value": "={{ ($json.subject || '').toLowerCase().startsWith('re:') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "i2",
+      "name": "Build payload",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://plexa-pipeline.vercel.app/ingest",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 200
+            }
+          },
+          "timeout": 90000
+        }
+      },
+      "id": "i3",
+      "name": "POST /ingest",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000,
+      "position": [
+        480,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "qbNGNZK6Q5HnbsNq",
+          "name": "Plexa Webhook Secret"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "i4c",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "Manual Review",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "i4",
+      "name": "Needs attention?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        720,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "addLabels",
+        "messageId": "={{ $('Build payload').item.json.message_id }}",
+        "labelIds": [
+          "Label_121382909490854740"
+        ]
+      },
+      "id": "i5",
+      "name": "Label Needs Attention",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        960,
+        -48
+      ],
+      "webhookId": "4c31f20d-ff63-4fca-ab85-25d7d44a8212",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "XQNqvnyHEyYX0fBJ",
+          "name": "request@plexa"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "i6c",
+              "leftValue": "={{ $json.reply.should_send }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "i6",
+      "name": "Should reply?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1008,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $('POST /ingest').item.json;\nconst p = $('Build payload').item.json;\n\nconst strip = (h) =>\n  (h || '')\n    .replace(/<style[\\s\\S]*?<\\/style>/gi, '')\n    .replace(/<br\\s*\\/?>/gi, '\\n')\n    .replace(/<\\/(p|div|tr|h\\d|li|table)>/gi, '\\n')\n    .replace(/<[^>]+>/g, '')\n    .replace(/&nbsp;/g, ' ')\n    .replace(/&amp;/g, '&')\n    .replace(/&lt;/g, '<')\n    .replace(/&gt;/g, '>')\n    .replace(/&#x27;|&#39;/g, \"'\")\n    .replace(/&quot;/g, '\"')\n    .replace(/[ \\t]+\\n/g, '\\n')\n    .replace(/\\n{3,}/g, '\\n\\n')\n    .trim();\n\nconst quote = (s) =>\n  String(s || '')\n    .split('\\n')\n    .map((l) => '> ' + l)\n    .join('\\n');\n\nconst money = (n) => {\n  if (n == null || n === '') return null;\n  const num = Number(n);\n  if (!Number.isFinite(num)) return null;\n  return '$' + num.toLocaleString('en-US', { maximumFractionDigits: 0 });\n};\n\nconst fmtBudget = (min, max) => {\n  const a = money(min);\n  const b = money(max);\n  if (a && b) return `${a} – ${b}/mo`;\n  if (b) return `up to ${b}/mo`;\n  if (a) return `from ${a}/mo`;\n  return null;\n};\n\nconst fmtPets = (pets) => {\n  if (pets == null) return null;\n  if (Array.isArray(pets)) {\n    if (pets.length === 0) return 'None';\n    return pets.join(', ');\n  }\n  return String(pets);\n};\n\n/** Always \"Key: Value\" with a space after the colon. Skip blanks. */\nconst line = (key, value) => {\n  if (value == null) return null;\n  const v = String(value).trim();\n  if (!v) return null;\n  return `${key}: ${v}`;\n};\n\nconst lines = (pairs) =>\n  pairs.map(([k, v]) => line(k, v)).filter(Boolean).join('\\n');\n\nconst x = r.extraction || {};\nconst m = r.match || {};\nconst reply = r.reply || {};\n\nconst inbound =\n  p.body_plain && p.body_plain.trim()\n    ? p.body_plain.trim()\n    : strip(p.body_html);\nconst replyText = strip(reply.html);\n\nconst matchDetail = m.ready\n  ? `YES (zip ${(m.request && m.request.zip_code) || x.zip_code || '?'}, ${(m.request && m.request.bedrooms) || x.bedrooms || '?'}BR, move-in ${(m.request && m.request.move_in_date) || x.move_in_date || '?'})`\n  : `no (missing: ${(m.missing_fields || []).join(', ') || 'unknown'})`;\n\nconst header = lines([\n  ['Action', 'Reply approval needed'],\n  ['Tier', r.tier],\n  ['Sender', `${p.sender_name || ''} <${p.sender_email}>`.trim()],\n  ['Subject', p.subject],\n  ['Status', r.status],\n  ['Match Ready', m.ready ? 'yes' : 'no'],\n]);\n\nconst extracted = lines([\n  ['Location', x.location],\n  ['Zip Code', x.zip_code],\n  ['Bedrooms', x.bedrooms != null ? x.bedrooms : null],\n  ['Bathrooms', x.bathrooms != null ? x.bathrooms : null],\n  ['Budget', fmtBudget(x.budget_min, x.budget_max)],\n  ['Move-in Date', x.move_in_date],\n  ['Pets', fmtPets(x.pets)],\n  ['Occupants', x.occupants != null ? x.occupants : null],\n  ['Adults', x.adults != null ? x.adults : null],\n  ['Children', x.children != null ? x.children : null],\n  ['Duration', x.duration_months != null ? `${x.duration_months} months` : null],\n  ['Phone', x.phone],\n  ['Requester', x.requester_type],\n  ['Company', x.company_name],\n  [\n    'Amenities',\n    Array.isArray(x.amenities) && x.amenities.length\n      ? x.amenities.join(', ')\n      : null,\n  ],\n  ['Special Requests', x.special_requests],\n]);\n\nconst footer = lines([\n  ['Reply Subject', reply.subject],\n  ['Property Match on Approve', matchDetail],\n]);\n\nconst text = [\n  ':envelope_with_arrow: *Reply approval needed*',\n  '',\n  header,\n  extracted ? `\\n${extracted}` : '',\n  '',\n  '*Inbound email:*',\n  quote(inbound.slice(0, 1500)),\n  '',\n  '*Proposed reply:*',\n  quote(replyText.slice(0, 2000)),\n  footer ? `\\n${footer}` : '',\n]\n  .join('\\n')\n  .replace(/\\n{3,}/g, '\\n\\n')\n  .trim();\n\nreturn [{ json: { text } }];"
+      },
+      "id": "i11",
+      "name": "Build approval",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1216,
+        -32
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "C0C7D439R5J"
+        },
+        "message": "={{ $json.text }}",
+        "approvalOptions": {
+          "values": {
+            "approvalType": "double",
+            "approveLabel": "Approve & send"
+          }
+        },
+        "options": {
+          "limitWaitTime": {
+            "values": {
+              "resumeAmount": 24
+            }
+          }
+        }
+      },
+      "id": "i12",
+      "name": "Approve reply?",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        1456,
+        -32
+      ],
+      "webhookId": "a32130af-dc1a-41a5-b920-9922614374ab",
+      "credentials": {
+        "slackApi": {
+          "id": "4Nhfah1Q0WBV00od",
+          "name": "Plexa Slack Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "i13c",
+              "leftValue": "={{ $json.data && $json.data.approved === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "i13",
+      "name": "Approved?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1696,
+        -32
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "reply",
+        "messageId": "={{ $('Build payload').item.json.message_id }}",
+        "message": "={{ $('POST /ingest').item.json.reply.html }}",
+        "options": {
+          "replyToSenderOnly": true
+        }
+      },
+      "id": "i7",
+      "name": "Gmail Reply",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1952,
+        -256
+      ],
+      "webhookId": "99a08ce7-cb03-4ffa-a4b7-04c380956397",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "XQNqvnyHEyYX0fBJ",
+          "name": "request@plexa"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "addLabels",
+        "messageId": "={{ $('Build payload').item.json.message_id }}",
+        "labelIds": [
+          "Label_6663289192800495718"
+        ]
+      },
+      "id": "i8",
+      "name": "Label Processed",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        2208,
+        -32
+      ],
+      "webhookId": "c564cf2a-bc82-4901-9f9c-8d4312b801d0",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "XQNqvnyHEyYX0fBJ",
+          "name": "request@plexa"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c987d1e3-e429-4c5c-87f5-63092780f79b",
+              "leftValue": "={{ $('Approved?').item.json.data.approved }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2416,
+        -32
+      ],
+      "id": "7a56aa3b-8b1b-47ee-991b-f201c5710600",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://plexahousing.app.n8n.cloud/webhook/intake-email",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "value": "={{ JSON.stringify($('POST /ingest').item.json.match.request) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        2688,
+        -224
+      ],
+      "id": "5093c0a8-576e-4c3c-9023-2a7f45f7954a",
+      "name": "HTTP Request",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// ═══════════════════════════════════════════════════════════════════════════\n// Shared helpers, prepended to every Code body in this folder by\n// logging-nodes.js. Not a node on its own.\n//\n// All five intake stage logs run in \"Run Once for Each Item\" mode: a Gmail\n// poll can deliver several emails in one execution and every one of them gets\n// its own message. `$json` is the current item; `$('Build payload').item` is\n// the email it came from (paired item, which n8n keeps across HTTP Request and\n// Gmail error outputs).\n// ═══════════════════════════════════════════════════════════════════════════\nfunction str(v) { return v === null || v === undefined ? '' : String(v); }\nfunction has(v) { return v !== null && v !== undefined && str(v).trim() !== ''; }\nfunction clip(s, n) { s = str(s); return s.length <= n ? s : s.slice(0, n - 1) + '…'; }\nfunction compact(o) { const out = {}; for (const k of Object.keys(o)) if (has(o[k])) out[k] = o[k]; return out; }\n\n// Paired item first; the first item of that node when pairing is unavailable\n// (a manual run with pinned data, or an item n8n could not trace); {} when the\n// node never ran in this execution.\nfunction pairedJson(name) {\n  try { const j = $(name).item.json; if (j) return j; } catch (e) { /* fall through */ }\n  try { return $(name).first().json || {}; } catch (e) { return {}; }\n}\n\n// The n8n error-output item shape is { error: { message, httpCode|status|statusCode, … } }\n// for HTTP Request and { error: \"message\" } for Gmail. Read both.\nfunction errMessage(j) {\n  const e = j && j.error;\n  if (typeof e === 'string') return e;\n  if (e && typeof e === 'object') return str(e.message || e.description || JSON.stringify(e));\n  return e ? str(e) : '';\n}\nfunction httpStatus(j) {\n  const e = j && j.error;\n  const s = e && typeof e === 'object' ? (e.httpCode || e.status || e.statusCode) : undefined;\n  const n = Number(s);\n  return Number.isInteger(n) && n >= 100 && n <= 599 ? n : undefined;\n}\n\n// \"Jane Doe <jane@example.com>\" / \"<jane@example.com>\", from the Build payload item.\nfunction who(p) {\n  const email = str(p.sender_email || 'unknown sender');\n  return (has(p.sender_name) ? str(p.sender_name).trim() + ' ' : '') + '<' + email + '>';\n}\nfunction subjectOf(p) { return has(p.subject) ? clip(str(p.subject).trim(), 80) : '(no subject)'; }\n\n// One contract item (plexa.n8n.log/v1). `stage`, `status`, `severity`,\n// `summary` are required; `details` and `error` optional.\nfunction contract(fields) {\n  const out = {\n    workflow_name: $workflow.name,\n    workflow_id: $workflow.id,\n    execution_id: String($execution.id),\n    stage: fields.stage,\n    status: fields.status,\n    severity: fields.severity,\n    summary: clip(fields.summary, 300),\n    details: compact(fields.details || {}),\n    timestamp: new Date().toISOString(),\n  };\n  if (fields.error && has(fields.error.message)) out.error = fields.error;\n  return { json: out };\n}\n\n// ═══════════════════════════════════════════════════════════════════════════\n// n8n — \"Log: Ingest Failed\" · Code node · Mode: \"Run Once for Each Item\"\n// Workflow: Plexa Intake · \"POST /ingest\" ERROR output\n//\n// GENERATED into the workflow by n8n/intake-logging/logging-nodes.js. Edit this\n// file, rebuild, re-import. Never edit the node in the n8n UI.\n//\n// The service call failed after its 2 tries: 401/403 (webhook secret), 503\n// (WEBHOOK_SECRET unset on Vercel), 5xx, or a timeout past the 90 s budget.\n// Nothing was classified, nothing was written to Airtable, no reply was\n// proposed, and the email sits in the inbox with no label. Before this node\n// that was an n8n crash; now the run stays green and Slack is the record.\n// Red, always: a person wrote in and nobody will answer until someone looks.\n// ═══════════════════════════════════════════════════════════════════════════\nconst p = pairedJson('Build payload');\nconst message = errMessage($json) || 'unknown error';\nconst status = httpStatus($json);\nconst error = { message, node: 'POST /ingest' };\nif (status !== undefined) error.http_status = status;\n\nreturn contract({\n  stage: 'ingest',\n  status: 'fail',\n  severity: 'Red',\n  summary: 'POST /ingest failed for ' + who(p) + ' — \"' + subjectOf(p) + '\": ' + message +\n    '. The email was not classified or replied to and carries no label.',\n  error,\n  details: {\n    sender: p.sender_email,\n    subject: subjectOf(p),\n    message_id: p.message_id,\n    endpoint: '/ingest',\n    tries: 2,\n    action: 'Check the Vercel function logs and the Plexa Webhook Secret credential; the message will not be re-polled, handle it by hand',\n  },\n});\n"
+      },
+      "id": "9e2ff5d6-cc78-49a3-8a3e-ec541ca5473d",
+      "name": "Log: Ingest Failed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        560
+      ],
+      "notes": "GENERATED — do not edit here. Source: n8n/intake-logging/logging/ingest-failed.node.js (+ _prelude.js)\n\nPOST /ingest returned an error after 2 tries (401/403 = Plexa Webhook Secret credential, 503 = WEBHOOK_SECRET unset on Vercel, 5xx/timeout = the service). Nothing was classified; the email has no label and will not be re-polled. Red, always.",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "REPLACE_ME"
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "87f2e5a4-b95b-4311-851b-2bc2e65df5a1",
+      "name": "Logger (ingest)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        960,
+        560
+      ],
+      "notes": "Shared logger: \"Plexa — Slack Logger\" (RyanPlexa/n8n-logger/). If this shows REPLACE_ME, pick the logger from the list once after import, or rebuild with N8N_LOGGER_WORKFLOW_ID set. Fire-and-forget: a logger failure never fails this run.",
+      "notesInFlow": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// ═══════════════════════════════════════════════════════════════════════════\n// Shared helpers, prepended to every Code body in this folder by\n// logging-nodes.js. Not a node on its own.\n//\n// All five intake stage logs run in \"Run Once for Each Item\" mode: a Gmail\n// poll can deliver several emails in one execution and every one of them gets\n// its own message. `$json` is the current item; `$('Build payload').item` is\n// the email it came from (paired item, which n8n keeps across HTTP Request and\n// Gmail error outputs).\n// ═══════════════════════════════════════════════════════════════════════════\nfunction str(v) { return v === null || v === undefined ? '' : String(v); }\nfunction has(v) { return v !== null && v !== undefined && str(v).trim() !== ''; }\nfunction clip(s, n) { s = str(s); return s.length <= n ? s : s.slice(0, n - 1) + '…'; }\nfunction compact(o) { const out = {}; for (const k of Object.keys(o)) if (has(o[k])) out[k] = o[k]; return out; }\n\n// Paired item first; the first item of that node when pairing is unavailable\n// (a manual run with pinned data, or an item n8n could not trace); {} when the\n// node never ran in this execution.\nfunction pairedJson(name) {\n  try { const j = $(name).item.json; if (j) return j; } catch (e) { /* fall through */ }\n  try { return $(name).first().json || {}; } catch (e) { return {}; }\n}\n\n// The n8n error-output item shape is { error: { message, httpCode|status|statusCode, … } }\n// for HTTP Request and { error: \"message\" } for Gmail. Read both.\nfunction errMessage(j) {\n  const e = j && j.error;\n  if (typeof e === 'string') return e;\n  if (e && typeof e === 'object') return str(e.message || e.description || JSON.stringify(e));\n  return e ? str(e) : '';\n}\nfunction httpStatus(j) {\n  const e = j && j.error;\n  const s = e && typeof e === 'object' ? (e.httpCode || e.status || e.statusCode) : undefined;\n  const n = Number(s);\n  return Number.isInteger(n) && n >= 100 && n <= 599 ? n : undefined;\n}\n\n// \"Jane Doe <jane@example.com>\" / \"<jane@example.com>\", from the Build payload item.\nfunction who(p) {\n  const email = str(p.sender_email || 'unknown sender');\n  return (has(p.sender_name) ? str(p.sender_name).trim() + ' ' : '') + '<' + email + '>';\n}\nfunction subjectOf(p) { return has(p.subject) ? clip(str(p.subject).trim(), 80) : '(no subject)'; }\n\n// One contract item (plexa.n8n.log/v1). `stage`, `status`, `severity`,\n// `summary` are required; `details` and `error` optional.\nfunction contract(fields) {\n  const out = {\n    workflow_name: $workflow.name,\n    workflow_id: $workflow.id,\n    execution_id: String($execution.id),\n    stage: fields.stage,\n    status: fields.status,\n    severity: fields.severity,\n    summary: clip(fields.summary, 300),\n    details: compact(fields.details || {}),\n    timestamp: new Date().toISOString(),\n  };\n  if (fields.error && has(fields.error.message)) out.error = fields.error;\n  return { json: out };\n}\n\n// ═══════════════════════════════════════════════════════════════════════════\n// n8n — \"Log: Intake Result\" · Code node · Mode: \"Run Once for Each Item\"\n// Workflow: Plexa Intake · \"POST /ingest\" success output, parallel to\n// \"Needs attention?\" (both run on every email)\n//\n// GENERATED into the workflow by n8n/intake-logging/logging-nodes.js. Edit this\n// file, rebuild, re-import. Never edit the node in the n8n UI.\n//\n// Replaces the old \"Build log\" → \"Slack log\" webhook post. One message per\n// processed email, the moment the service answers, so the channel shows how\n// each email was judged before anyone is asked to approve anything.\n//\n//   Red     status \"Manual Review\" (pipeline_error, Airtable 422, …): a person\n//           wrote in and the service could not finish. Labelled Needs Attention.\n//   Yellow  a lead the service decided NOT to answer: follow-up from a Tier 1/2\n//           sender (Needs Review), cooldown, max replies, kill switch off.\n//   Green   reply proposed and waiting for approval; JUNK filtered; duplicate\n//           skipped.\n//\n// $json is the full /ingest response (PipelineResult.to_dict()). Never branch\n// on `classification` alone: duplicates and JUNK carry default values.\n// ═══════════════════════════════════════════════════════════════════════════\nconst r = $json || {};\nconst p = pairedJson('Build payload');\nconst e = r.extraction || {};\nconst rep = r.reply || {};\nconst m = r.match || {};\nconst partner = r.partner || {};\nconst sender = who(p), subject = subjectOf(p);\n\nconst fmt = v => (v === null || v === undefined || v === '') ? null\n  : (Array.isArray(v) ? (v.length ? v.join(', ') : 'none') : String(v));\nconst money = (a, b) => (a != null && b != null) ? '$' + a + '–$' + b + '/mo'\n  : b != null ? 'up to $' + b + '/mo' : a != null ? 'from $' + a + '/mo' : null;\n\nconst requirements = [\n  e.bedrooms != null ? e.bedrooms + 'BR' : null,\n  e.bathrooms != null ? e.bathrooms + 'BA' : null,\n  money(e.budget_min, e.budget_max),\n  has(e.move_in_date) ? 'move-in ' + e.move_in_date : null,\n  Array.isArray(e.pets) ? 'pets: ' + (e.pets.length ? e.pets.join(', ') : 'none') : null,\n  e.occupants != null ? e.occupants + ' occupant' + (e.occupants === 1 ? '' : 's') : null,\n  e.duration_months != null ? e.duration_months + ' mo' : null,\n].filter(Boolean).join(' · ');\nconst location = [fmt(e.location), has(e.zip_code) ? 'zip ' + e.zip_code : null].filter(Boolean).join(' · ');\nconst extraction = [\n  e.confidence != null ? 'confidence ' + e.confidence : null,\n  Array.isArray(e.missing_fields) && e.missing_fields.length ? 'missing: ' + e.missing_fields.join(', ') : null,\n  has(e.notes) ? clip(e.notes, 200) : null,\n].filter(Boolean).join(' · ');\nconst matchText = m.ready ? 'ready' : 'not ready' +\n  (Array.isArray(m.missing_fields) && m.missing_fields.length ? ' (missing: ' + m.missing_fields.join(', ') + ')' : '');\nconst partnerText = partner.known\n  ? 'known' + (has(partner.inventory_tier) ? ' · ' + partner.inventory_tier : '') +\n    (has(partner.vendor) ? ' · ' + partner.vendor : '') + (has(partner.matched_by) ? ' (by ' + partner.matched_by + ')' : '')\n  : null;\n\nlet severity = 'Green', status = 'success', summary, error;\nif (r.is_duplicate) {\n  summary = 'Duplicate skipped — ' + sender + ' — \"' + subject + '\" was already processed.';\n} else if (r.classification === 'JUNK') {\n  summary = 'JUNK filtered — ' + sender + ' — \"' + subject + '\". Nothing stored, nothing sent.';\n} else if (r.status === 'Manual Review') {\n  severity = 'Red'; status = 'fail';\n  const why = has(r.error) ? str(r.error) : (has(rep.skip_reason) ? str(rep.skip_reason) : 'pipeline error');\n  summary = 'Manual Review — ' + sender + ' — \"' + subject + '\": ' + why +\n    '. Labelled Needs Attention; nothing was sent, reply by hand.';\n  error = { message: clip(why, 600), node: 'POST /ingest' };\n} else {\n  const tier = has(r.tier) ? str(r.tier) : 'untiered';\n  const upgrade = r.is_upgrade ? ' (upgrade from Tier 3)' : '';\n  if (rep.should_send) {\n    summary = tier + ' lead' + upgrade + ' from ' + sender + ' — \"' + subject +\n      '\": reply awaiting approval in Slack; match ' + matchText + '.';\n  } else {\n    severity = 'Yellow';\n    const reason = has(rep.skip_reason) ? str(rep.skip_reason) : 'no reason given';\n    const hint = reason === 'follow_up' ? 'follow-up from a sender already past the gate; lead set to Needs Review for a human'\n      : reason === 'cooldown_active' ? 'cooldown still active for this sender'\n      : reason === 'max_replies_reached' ? 'this sender already had the maximum automatic replies'\n      : reason === 'auto_reply_disabled' ? 'AUTO_REPLY_ENABLED is off (kill switch)'\n      : reason;\n    summary = tier + ' lead' + upgrade + ' from ' + sender + ' — \"' + subject +\n      '\": no auto-reply (' + hint + '). Status ' + str(r.status || 'unknown') + '.';\n  }\n}\n\nreturn contract({\n  stage: 'intake',\n  status,\n  severity,\n  summary,\n  error,\n  details: {\n    sender: p.sender_email,\n    subject,\n    tier: r.is_duplicate || r.classification === 'JUNK' ? null : r.tier,\n    status: r.status,\n    reply: rep.should_send ? 'awaiting approval' : (has(rep.skip_reason) ? 'skip (' + rep.skip_reason + ')' : null),\n    match: r.is_duplicate || r.classification === 'JUNK' ? null : matchText,\n    location: location || null,\n    requirements: requirements || null,\n    extraction: extraction || null,\n    partner: partnerText,\n  },\n});\n"
+      },
+      "id": "6afecfa4-0a1e-4565-8a23-562e06659929",
+      "name": "Log: Intake Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        -224
+      ],
+      "notes": "GENERATED — do not edit here. Source: n8n/intake-logging/logging/intake-result.node.js (+ _prelude.js)\n\nEvery processed email, the moment the service answers, in parallel with \"Needs attention?\". Replaced the old \"Build log\" → \"Slack log\" webhook post on 2026-10-20. Red = Manual Review, Yellow = lead the service chose not to answer (follow-up, cooldown, max replies, kill switch), Green = reply awaiting approval, JUNK, duplicate.",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "REPLACE_ME"
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "6e587121-0239-434d-8d7e-0f37df38f11e",
+      "name": "Logger (intake)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        960,
+        -224
+      ],
+      "notes": "Shared logger: \"Plexa — Slack Logger\" (RyanPlexa/n8n-logger/). If this shows REPLACE_ME, pick the logger from the list once after import, or rebuild with N8N_LOGGER_WORKFLOW_ID set. Fire-and-forget: a logger failure never fails this run.",
+      "notesInFlow": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// ═══════════════════════════════════════════════════════════════════════════\n// Shared helpers, prepended to every Code body in this folder by\n// logging-nodes.js. Not a node on its own.\n//\n// All five intake stage logs run in \"Run Once for Each Item\" mode: a Gmail\n// poll can deliver several emails in one execution and every one of them gets\n// its own message. `$json` is the current item; `$('Build payload').item` is\n// the email it came from (paired item, which n8n keeps across HTTP Request and\n// Gmail error outputs).\n// ═══════════════════════════════════════════════════════════════════════════\nfunction str(v) { return v === null || v === undefined ? '' : String(v); }\nfunction has(v) { return v !== null && v !== undefined && str(v).trim() !== ''; }\nfunction clip(s, n) { s = str(s); return s.length <= n ? s : s.slice(0, n - 1) + '…'; }\nfunction compact(o) { const out = {}; for (const k of Object.keys(o)) if (has(o[k])) out[k] = o[k]; return out; }\n\n// Paired item first; the first item of that node when pairing is unavailable\n// (a manual run with pinned data, or an item n8n could not trace); {} when the\n// node never ran in this execution.\nfunction pairedJson(name) {\n  try { const j = $(name).item.json; if (j) return j; } catch (e) { /* fall through */ }\n  try { return $(name).first().json || {}; } catch (e) { return {}; }\n}\n\n// The n8n error-output item shape is { error: { message, httpCode|status|statusCode, … } }\n// for HTTP Request and { error: \"message\" } for Gmail. Read both.\nfunction errMessage(j) {\n  const e = j && j.error;\n  if (typeof e === 'string') return e;\n  if (e && typeof e === 'object') return str(e.message || e.description || JSON.stringify(e));\n  return e ? str(e) : '';\n}\nfunction httpStatus(j) {\n  const e = j && j.error;\n  const s = e && typeof e === 'object' ? (e.httpCode || e.status || e.statusCode) : undefined;\n  const n = Number(s);\n  return Number.isInteger(n) && n >= 100 && n <= 599 ? n : undefined;\n}\n\n// \"Jane Doe <jane@example.com>\" / \"<jane@example.com>\", from the Build payload item.\nfunction who(p) {\n  const email = str(p.sender_email || 'unknown sender');\n  return (has(p.sender_name) ? str(p.sender_name).trim() + ' ' : '') + '<' + email + '>';\n}\nfunction subjectOf(p) { return has(p.subject) ? clip(str(p.subject).trim(), 80) : '(no subject)'; }\n\n// One contract item (plexa.n8n.log/v1). `stage`, `status`, `severity`,\n// `summary` are required; `details` and `error` optional.\nfunction contract(fields) {\n  const out = {\n    workflow_name: $workflow.name,\n    workflow_id: $workflow.id,\n    execution_id: String($execution.id),\n    stage: fields.stage,\n    status: fields.status,\n    severity: fields.severity,\n    summary: clip(fields.summary, 300),\n    details: compact(fields.details || {}),\n    timestamp: new Date().toISOString(),\n  };\n  if (fields.error && has(fields.error.message)) out.error = fields.error;\n  return { json: out };\n}\n\n// ═══════════════════════════════════════════════════════════════════════════\n// n8n — \"Log: Reply Declined\" · Code node · Mode: \"Run Once for Each Item\"\n// Workflow: Plexa Intake · \"Approved?\" FALSE output\n//\n// GENERATED into the workflow by n8n/intake-logging/logging-nodes.js. Edit this\n// file, rebuild, re-import. Never edit the node in the n8n UI.\n//\n// Replaces the old \"Slack declined\" webhook post. A human clicked Decline on\n// the approval message, or nobody clicked within the 24 h wait. Nothing was\n// sent; the email is labelled Processed by the parallel connection. Yellow:\n// the system worked, but a requester is not getting an answer from it.\n//\n// $json is the \"Approve reply?\" output: { data: { approved: false } } on a\n// click; no `data.approved` when the wait timed out.\n// ═══════════════════════════════════════════════════════════════════════════\nconst p = pairedJson('Build payload');\nconst r = pairedJson('POST /ingest');\nconst d = ($json && $json.data) || {};\nconst timedOut = d.approved !== false;\nconst outcome = timedOut ? 'nobody approved within 24 h' : 'declined in Slack';\n\nreturn contract({\n  stage: 'approval',\n  status: 'success',\n  severity: 'Yellow',\n  summary: 'Reply to ' + who(p) + ' — \"' + subjectOf(p) + '\" ' + outcome +\n    '. Nothing sent; email labelled Processed. Answer by hand if the lead is real.',\n  details: {\n    sender: p.sender_email,\n    subject: subjectOf(p),\n    outcome: timedOut ? 'timed out' : 'declined',\n    tier: r.tier,\n    match: r.match && r.match.ready ? 'was ready (not sent)' : null,\n    reply_subject: r.reply && r.reply.subject,\n  },\n});\n"
+      },
+      "id": "f5d0679e-0773-4cf7-83ee-ff4c8d1a5c46",
+      "name": "Log: Reply Declined",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1952,
+        144
+      ],
+      "notes": "GENERATED — do not edit here. Source: n8n/intake-logging/logging/reply-declined.node.js (+ _prelude.js)\n\nDeclined in Slack, or the 24 h approval wait ran out. Nothing sent. Replaced the old \"Slack declined\" webhook post on 2026-10-20. \"Label Processed\" is reached directly from \"Approved?\" FALSE, not through this node, so a logging fault can never leave an email unlabelled. Yellow.",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "REPLACE_ME"
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "5a3f7111-c439-4fd7-8a12-92c660e17e18",
+      "name": "Logger (approval)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        2192,
+        144
+      ],
+      "notes": "Shared logger: \"Plexa — Slack Logger\" (RyanPlexa/n8n-logger/). If this shows REPLACE_ME, pick the logger from the list once after import, or rebuild with N8N_LOGGER_WORKFLOW_ID set. Fire-and-forget: a logger failure never fails this run.",
+      "notesInFlow": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// ═══════════════════════════════════════════════════════════════════════════\n// Shared helpers, prepended to every Code body in this folder by\n// logging-nodes.js. Not a node on its own.\n//\n// All five intake stage logs run in \"Run Once for Each Item\" mode: a Gmail\n// poll can deliver several emails in one execution and every one of them gets\n// its own message. `$json` is the current item; `$('Build payload').item` is\n// the email it came from (paired item, which n8n keeps across HTTP Request and\n// Gmail error outputs).\n// ═══════════════════════════════════════════════════════════════════════════\nfunction str(v) { return v === null || v === undefined ? '' : String(v); }\nfunction has(v) { return v !== null && v !== undefined && str(v).trim() !== ''; }\nfunction clip(s, n) { s = str(s); return s.length <= n ? s : s.slice(0, n - 1) + '…'; }\nfunction compact(o) { const out = {}; for (const k of Object.keys(o)) if (has(o[k])) out[k] = o[k]; return out; }\n\n// Paired item first; the first item of that node when pairing is unavailable\n// (a manual run with pinned data, or an item n8n could not trace); {} when the\n// node never ran in this execution.\nfunction pairedJson(name) {\n  try { const j = $(name).item.json; if (j) return j; } catch (e) { /* fall through */ }\n  try { return $(name).first().json || {}; } catch (e) { return {}; }\n}\n\n// The n8n error-output item shape is { error: { message, httpCode|status|statusCode, … } }\n// for HTTP Request and { error: \"message\" } for Gmail. Read both.\nfunction errMessage(j) {\n  const e = j && j.error;\n  if (typeof e === 'string') return e;\n  if (e && typeof e === 'object') return str(e.message || e.description || JSON.stringify(e));\n  return e ? str(e) : '';\n}\nfunction httpStatus(j) {\n  const e = j && j.error;\n  const s = e && typeof e === 'object' ? (e.httpCode || e.status || e.statusCode) : undefined;\n  const n = Number(s);\n  return Number.isInteger(n) && n >= 100 && n <= 599 ? n : undefined;\n}\n\n// \"Jane Doe <jane@example.com>\" / \"<jane@example.com>\", from the Build payload item.\nfunction who(p) {\n  const email = str(p.sender_email || 'unknown sender');\n  return (has(p.sender_name) ? str(p.sender_name).trim() + ' ' : '') + '<' + email + '>';\n}\nfunction subjectOf(p) { return has(p.subject) ? clip(str(p.subject).trim(), 80) : '(no subject)'; }\n\n// One contract item (plexa.n8n.log/v1). `stage`, `status`, `severity`,\n// `summary` are required; `details` and `error` optional.\nfunction contract(fields) {\n  const out = {\n    workflow_name: $workflow.name,\n    workflow_id: $workflow.id,\n    execution_id: String($execution.id),\n    stage: fields.stage,\n    status: fields.status,\n    severity: fields.severity,\n    summary: clip(fields.summary, 300),\n    details: compact(fields.details || {}),\n    timestamp: new Date().toISOString(),\n  };\n  if (fields.error && has(fields.error.message)) out.error = fields.error;\n  return { json: out };\n}\n\n// ═══════════════════════════════════════════════════════════════════════════\n// n8n — \"Log: Reply Failed\" · Code node · Mode: \"Run Once for Each Item\"\n// Workflow: Plexa Intake · \"Gmail Reply\" ERROR output\n//\n// GENERATED into the workflow by n8n/intake-logging/logging-nodes.js. Edit this\n// file, rebuild, re-import. Never edit the node in the n8n UI.\n//\n// A human approved the reply and Gmail refused to send it (token expired,\n// quota, the original message gone). Before this node that was an n8n crash\n// after the approval, which looked like success in Slack. The email is NOT\n// labelled Processed and no match request goes out, because the success path\n// never ran. Red: someone approved an answer that never left.\n// ═══════════════════════════════════════════════════════════════════════════\nconst p = pairedJson('Build payload');\nconst r = pairedJson('POST /ingest');\nconst message = errMessage($json) || 'unknown Gmail error';\nconst status = httpStatus($json);\nconst error = { message, node: 'Gmail Reply' };\nif (status !== undefined) error.http_status = status;\n\nreturn contract({\n  stage: 'reply',\n  status: 'fail',\n  severity: 'Red',\n  summary: 'Approved reply to ' + who(p) + ' — \"' + subjectOf(p) + '\" was NOT sent: ' + message +\n    '. Send it by hand; no label was applied and no match request went out.',\n  error,\n  details: {\n    sender: p.sender_email,\n    subject: subjectOf(p),\n    tier: r.tier,\n    reply_subject: r.reply && r.reply.subject,\n    match: r.match && r.match.ready ? 'ready, not sent' : null,\n    message_id: p.message_id,\n    action: 'Reply from the inbox, then label Processed and, if match-ready, submit the match request by hand',\n  },\n});\n"
+      },
+      "id": "583f091d-ecd8-4283-8dd2-116e05098414",
+      "name": "Log: Reply Failed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2208,
+        -432
+      ],
+      "notes": "GENERATED — do not edit here. Source: n8n/intake-logging/logging/reply-failed.node.js (+ _prelude.js)\n\nGmail refused to send an APPROVED reply. The success path (Label Processed → match hand-off) does not run for this item, so nothing downstream pretends it was sent. Red: someone approved an answer that never left.",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "REPLACE_ME"
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "ed9c7e85-3cae-412a-8b93-802ce705cd85",
+      "name": "Logger (reply)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        2448,
+        -432
+      ],
+      "notes": "Shared logger: \"Plexa — Slack Logger\" (RyanPlexa/n8n-logger/). If this shows REPLACE_ME, pick the logger from the list once after import, or rebuild with N8N_LOGGER_WORKFLOW_ID set. Fire-and-forget: a logger failure never fails this run.",
+      "notesInFlow": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// ═══════════════════════════════════════════════════════════════════════════\n// Shared helpers, prepended to every Code body in this folder by\n// logging-nodes.js. Not a node on its own.\n//\n// All five intake stage logs run in \"Run Once for Each Item\" mode: a Gmail\n// poll can deliver several emails in one execution and every one of them gets\n// its own message. `$json` is the current item; `$('Build payload').item` is\n// the email it came from (paired item, which n8n keeps across HTTP Request and\n// Gmail error outputs).\n// ═══════════════════════════════════════════════════════════════════════════\nfunction str(v) { return v === null || v === undefined ? '' : String(v); }\nfunction has(v) { return v !== null && v !== undefined && str(v).trim() !== ''; }\nfunction clip(s, n) { s = str(s); return s.length <= n ? s : s.slice(0, n - 1) + '…'; }\nfunction compact(o) { const out = {}; for (const k of Object.keys(o)) if (has(o[k])) out[k] = o[k]; return out; }\n\n// Paired item first; the first item of that node when pairing is unavailable\n// (a manual run with pinned data, or an item n8n could not trace); {} when the\n// node never ran in this execution.\nfunction pairedJson(name) {\n  try { const j = $(name).item.json; if (j) return j; } catch (e) { /* fall through */ }\n  try { return $(name).first().json || {}; } catch (e) { return {}; }\n}\n\n// The n8n error-output item shape is { error: { message, httpCode|status|statusCode, … } }\n// for HTTP Request and { error: \"message\" } for Gmail. Read both.\nfunction errMessage(j) {\n  const e = j && j.error;\n  if (typeof e === 'string') return e;\n  if (e && typeof e === 'object') return str(e.message || e.description || JSON.stringify(e));\n  return e ? str(e) : '';\n}\nfunction httpStatus(j) {\n  const e = j && j.error;\n  const s = e && typeof e === 'object' ? (e.httpCode || e.status || e.statusCode) : undefined;\n  const n = Number(s);\n  return Number.isInteger(n) && n >= 100 && n <= 599 ? n : undefined;\n}\n\n// \"Jane Doe <jane@example.com>\" / \"<jane@example.com>\", from the Build payload item.\nfunction who(p) {\n  const email = str(p.sender_email || 'unknown sender');\n  return (has(p.sender_name) ? str(p.sender_name).trim() + ' ' : '') + '<' + email + '>';\n}\nfunction subjectOf(p) { return has(p.subject) ? clip(str(p.subject).trim(), 80) : '(no subject)'; }\n\n// One contract item (plexa.n8n.log/v1). `stage`, `status`, `severity`,\n// `summary` are required; `details` and `error` optional.\nfunction contract(fields) {\n  const out = {\n    workflow_name: $workflow.name,\n    workflow_id: $workflow.id,\n    execution_id: String($execution.id),\n    stage: fields.stage,\n    status: fields.status,\n    severity: fields.severity,\n    summary: clip(fields.summary, 300),\n    details: compact(fields.details || {}),\n    timestamp: new Date().toISOString(),\n  };\n  if (fields.error && has(fields.error.message)) out.error = fields.error;\n  return { json: out };\n}\n\n// ═══════════════════════════════════════════════════════════════════════════\n// n8n — \"Log: Hand-off\" · Code node · Mode: \"Run Once for Each Item\"\n// Workflow: Plexa Intake · \"HTTP Request\" (POST to Property Matching) BOTH\n// outputs — success and error — plus \"Match ready?\" FALSE, all into this one node\n//\n// GENERATED into the workflow by n8n/intake-logging/logging-nodes.js. Edit this\n// file, rebuild, re-import. Never edit the node in the n8n UI.\n//\n// The last step of an approved lead: the reply has gone out, the email is\n// labelled Processed, and the match request has been POSTed to the Property\n// Matching workflow's webhook. One message closes the loop for that email.\n//\n//   Green   reply sent and the match request accepted by the webhook\n//   Green   reply sent; the lead was not match-ready, so \"Match ready?\" sent it\n//           here instead of to the POST (the service built no request)\n//   Red     reply sent but the POST to the matching webhook failed: the\n//           requester got an answer promising a match that never started\n//\n// The Property Matching workflow posts its own validate / search / pricing /\n// run messages once it has the request, so this node says nothing about what\n// matching did with it.\n// ═══════════════════════════════════════════════════════════════════════════\nconst p = pairedJson('Build payload');\nconst r = pairedJson('POST /ingest');\nconst m = r.match || {};\nconst req = m.request || {};\nconst failed = $json && $json.error !== undefined && $json.error !== null;\nconst sender = who(p), subject = subjectOf(p);\n\nconst matchBrief = m.ready\n  ? 'zip ' + str(req.zip_code || '?') + ', ' + str(req.bedrooms || '?') + 'BR, move-in ' + str(req.move_in_date || '?')\n  : 'not match-ready' + (Array.isArray(m.missing_fields) && m.missing_fields.length ? ' (missing: ' + m.missing_fields.join(', ') + ')' : '');\n\nlet severity = 'Green', status = 'success', summary, error;\nif (failed) {\n  const message = errMessage($json) || 'unknown error';\n  const httpCode = httpStatus($json);\n  severity = 'Red'; status = 'fail';\n  summary = 'Reply sent to ' + sender + ' — \"' + subject + '\", but the match request POST to Property Matching failed: ' +\n    message + '. Submit the match request by hand (' + matchBrief + ').';\n  error = { message, node: 'HTTP Request' };\n  if (httpCode !== undefined) error.http_status = httpCode;\n} else if (m.ready) {\n  summary = 'Reply sent to ' + sender + ' — \"' + subject + '\"; match request handed to Property Matching (' + matchBrief + ').';\n} else {\n  summary = 'Reply sent to ' + sender + ' — \"' + subject + '\"; ' + matchBrief + ', so no match request was built.';\n}\n\nreturn contract({\n  stage: 'match',\n  status,\n  severity,\n  summary,\n  error,\n  details: {\n    sender: p.sender_email,\n    subject,\n    tier: r.tier,\n    match: failed ? 'FAILED' : (m.ready ? 'sent' : 'none'),\n    zip_code: m.ready ? req.zip_code : null,\n    bedrooms: m.ready ? req.bedrooms : null,\n    move_in_date: m.ready ? req.move_in_date : null,\n    reply_subject: r.reply && r.reply.subject,\n    partner: r.partner && r.partner.known ? (r.partner.inventory_tier || 'known') : null,\n  },\n});\n"
+      },
+      "id": "b55ae851-23e7-4af9-860e-db7631750f17",
+      "name": "Log: Hand-off",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2928,
+        -224
+      ],
+      "notes": "GENERATED — do not edit here. Source: n8n/intake-logging/logging/hand-off.node.js (+ _prelude.js)\n\nEnd of an approved lead: fed by BOTH outputs of \"HTTP Request\" (the POST to Property Matching). Green: reply sent and match request accepted, or nothing to match. Red: the POST failed — the requester was promised a match that never started. Property Matching logs its own stages after this.",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "REPLACE_ME"
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "e0e3344d-46d3-47cc-8197-3da29d91e2d6",
+      "name": "Logger (match)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        3168,
+        -224
+      ],
+      "notes": "Shared logger: \"Plexa — Slack Logger\" (RyanPlexa/n8n-logger/). If this shows REPLACE_ME, pick the logger from the list once after import, or rebuild with N8N_LOGGER_WORKFLOW_ID set. Fire-and-forget: a logger failure never fails this run.",
+      "notesInFlow": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "match-ready",
+              "leftValue": "={{ $('POST /ingest').item.json.match.ready === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "50cc30b1-95ea-4d09-869e-234b344ba6b4",
+      "name": "Match ready?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2656,
+        -32
+      ],
+      "notes": "Added 2026-10-20 by n8n/intake-logging. Only approved leads reach here (the \"If\" before it). TRUE: match.request exists → POST to Property Matching. FALSE: Tier 3, nothing to match → \"Log: Hand-off\" still posts the Green \"reply sent, no match request was built\". Before this node every approved reply POSTed, with a null body for Tier 3.",
+      "notesInFlow": true
+    }
+  ],
+  "pinData": {
+    "Gmail Trigger": [
+      {
+        "json": {
+          "id": "1a15707c849df7a8",
+          "threadId": "1a15707c849df7a8",
+          "labelIds": [
+            "UNREAD",
+            "IMPORTANT",
+            "CATEGORY_PERSONAL",
+            "INBOX"
+          ],
+          "sizeEstimate": 7546,
+          "headers": {
+            "delivered-to": "Delivered-To: requests@plexahousing.com",
+            "received": "Received: from mail-sor-f41.google.com (mail-sor-f41.google.com. [209.85.220.41])\r\n        by mx.google.com with SMTPS id a640c23a62f3a-c45c917be32sor47985166b.11.2026.10.19.18.58.10\r\n        for <requests@plexahousing.com>\r\n        (Google Transport Security);\r\n        Mon, 19 Oct 2026 18:58:10 -0700 (PDT)",
+            "x-received": "X-Received: by 2002:a17:906:d54d:b0:c3e:34fa:611d with SMTP id\r\n a640c23a62f3a-c419f609eecmr660903066b.35.1792461489812; Mon, 19 Oct 2026\r\n 18:58:09 -0700 (PDT)",
+            "arc-seal": "ARC-Seal: i=1; a=rsa-sha256; t=1792461490; cv=none;\r\n        d=google.com; s=arc-20260327;\r\n        b=P6t4LsStMxw0och7WFsOVhIa9T3ozrtYUbUz1JGMP/IBDR0wIxrwF6C+EmfK2iqLpy\r\n         m+BMxnhAAJGdiVlGJMDoYuO/0EF19sNlkDBhhYa83a1A/6NETpvmTWeLiVgiYd2HRP2w\r\n         JQDASaQZdie0VDTPIf55IFafqksYhN+treqnqZCnlRn7KHt9qoFEqROaGRVP+fFRw1dT\r\n         gXsGm7Fp6KC3cmLZNgAjsfZJDwVbyf/RtfYpvQ+Qmes8DB8QhnTTPE9jTNAh5qMEjfsp\r\n         HnklIwBucJJnWLJUUPlBAsVPHqrr4NCjMEBF9usDeqTjJ92AC8rOxLzulyVeQlW55c6j\r\n         8hBQ==",
+            "arc-message-signature": "ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=google.com; s=arc-20260327;\r\n        h=to:subject:message-id:date:from:mime-version:dkim-signature;\r\n        bh=tWnT0daPs4vuxAxFCc9LLy1n6xtLCzFwBFuMKiC8qxg=;\r\n        fh=NE0+cyAfIUnxxh16PEjbDA9HK7Q4paZXa6tXUjpzq0I=;\r\n        b=VLIEQKyOeMG5j3DTNBFvNEq+LAv3awBYk+o8wRwbe5nMgJpvXNKxC8KN0TePQO53/6\r\n         YgsVPTBTteRxaLmcGiXzSnmhJ+TAa8csN5BDOiwmYdqQ0s1bbZ70wEdw/2fE5957vI3A\r\n         eJ9PLa3J++grNAwkkMFFdv1hH32ANCitC5Fz2mnu0KAj29YhzhsHBT3F+xNCzv9wYs/A\r\n         WKBA95cBVcc2UnV1P3gn1A+77ny4CMv3lcHnN6Souh0r2DClpoZEsiZ5MAY7xfKaFhwJ\r\n         kyBJxg/P1LSUhvjyN/n9L9V1QIEuxIPBxUY6UTxoGSPf8nio78HrptONA9MpJb1u9OGR\r\n         8GDA==;\r\n        darn=plexahousing.com",
+            "arc-authentication-results": "ARC-Authentication-Results: i=1; mx.google.com; arc=none",
+            "return-path": "Return-Path: <brandonkohler2000@gmail.com>",
+            "received-spf": "Received-SPF: pass (google.com: domain of brandonkohler2000@gmail.com designates 209.85.220.41 as permitted sender) client-ip=209.85.220.41;",
+            "authentication-results": "Authentication-Results: mx.google.com;\r\n       dkim=pass header.i=@gmail.com header.s=20251104 header.b=TkrfpFxU;\r\n       arc=pass (i=1);\r\n       spf=pass (google.com: domain of brandonkohler2000@gmail.com designates 209.85.220.41 as permitted sender) smtp.mailfrom=brandonkohler2000@gmail.com;\r\n       dmarc=pass (p=NONE sp=QUARANTINE dis=NONE) header.from=gmail.com;\r\n       dara=neutral header.i=@plexahousing.com",
+            "dkim-signature": "DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;\r\n        d=gmail.com; s=20251104; t=1792461490; x=1793066290; darn=plexahousing.com;\r\n        h=content-type:to:subject:message-id:date:from:mime-version:from:to\r\n         :cc:subject:date:message-id:reply-to:content-type;\r\n        bh=tWnT0daPs4vuxAxFCc9LLy1n6xtLCzFwBFuMKiC8qxg=;\r\n        b=TkrfpFxUG5QcWIn+X7GHKmLtw3zR73O8b/PQn4vM6wP+3kUXzZrauTaoyL6G13AKjd\r\n         a5z2EVds+HeEq6omSFVJDQ/v5Sy0G3JZ3MsJBlNcbvT5biDnE9Ks+3lRnoXCR5a1vshx\r\n         RocTi08Lb3Lp5ttpX5w7XmpMWc309pKZKJCTt9ku6xnm77v2oNLkrYMUrDgAxRtAWzkE\r\n         dKevLqiHxuHozqhcv5gAT/mhhPr1fZ4WzrU85A+G1m9QeJSoTk0kRqZ/ES9Q0iY1DFaD\r\n         3X1n1ceuNaLoOeMju228WngEBzMmPsqdQqsHyOrDvqIlK01puPH55Md6L7/BGaO44h8y\r\n         1Ufw==",
+            "x-google-dkim-signature": "X-Google-DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;\r\n        d=1e100.net; s=20260707; t=1792461490; x=1793066290;\r\n        h=content-type:to:subject:message-id:date:from:mime-version:x-gm-gg\r\n         :x-gm-message-state:from:to:cc:subject:date:message-id:reply-to\r\n         :content-type;\r\n        bh=tWnT0daPs4vuxAxFCc9LLy1n6xtLCzFwBFuMKiC8qxg=;\r\n        b=B2vd2GZ+RgbSMCxj/UdLJJ65AjO03Lk3jbEQeSAvpkAWDrAZAVOsIDtu+VcH0hLIx/\r\n         lXBPGxJ8UqNsyp6vDFZ9WAqWy4h7KJ3oX2O4XNoWmBxUQeSqBclAVyE7K2mIv88gqbMs\r\n         ZrdG6VxFbmva8eWPye2L5fboam3Ckx7V3O6jcS8MMhPDD2nBHlk+1WtZD4kz5AeVwWYF\r\n         /+kXpmj19MQRyHeFtPwu5c07ZMcyVWILX7ScLnsd5hqS1H/vH4jGKIIfGN/Jen30qgpp\r\n         2lWMsg9NIpcRMjq6DBz4IqcU5zriMcDiV+sti01nAU7Iy9wJnQBdRHKXtfzI/VbRSyRW\r\n         X7og==",
+            "x-gm-message-state": "X-Gm-Message-State: AFq9FYKeScEctjAXPptyMGtKh7TEZwgwnRvwoM9sz9UP7N+L4TZAnmzI\r\n\tWeh/Y3uk1FaLxleUFqF/W+OdlO9KKDHsPoFFSad7bnLTPEl+OXRbeGuWM93SHVMLq2cKL5Tcjx9\r\n\twObPxUJviwNaxPRWACLtynblC87Xet4nLiJF5",
+            "x-gm-gg": "X-Gm-Gg: AYBFou3FJx+0IOFxQZzyWC4F4bnOoQBhVNtU+LN/uJy5GGcRiMtmUOJwJOOw5R3hDUe\r\n\tktSAQ089Ll0+rORoM5j9hBPHZJGTMieIkIcjp3K98Z8W0AAEDQ3h6EXG8NcHVqOvvf/b9A6Gdra\r\n\tRle9ZW37bJqxu0O/Ouv76CTSzir16dRoVYU4JRRdsJZM40Ba41e2/oEFhiVSzYJXq+KdYPLLQST\r\n\thzmuMQIDgKRoNDeWIZ2uhnIKKMmxh4lycqdYvgE0+bhSQyIFad2JKqutfEUmZfzFprPkv7balb5\r\n\tq6Y4vcvYcx41qSy2gNjBgWsH8vfikCCcA5rXnSS5f9O7/BUHup2Q9Fg7goeHbccwYhhkjDAtRt7\r\n\tYbi+XVoefd4EWi4yc3agDY5o+CEP1GsGYwlcB32uAfg==",
+            "mime-version": "MIME-Version: 1.0",
+            "from": "From: Brandon Kohler <brandonkohler2000@gmail.com>",
+            "date": "Date: Mon, 19 Oct 2026 21:57:58 -0400",
+            "x-gm-features": "X-Gm-Features: AclHuK-SjkEDTNAnNFv3OwU88zbsNeh3Rht0QFhxvUA3M5DmUEjAo8RrxR_bIic",
+            "message-id": "Message-ID: <CAJ5xoACy6AFSzhCbLa8EWOkVt9ajgWeEBwbgOP5fJdQxNqJiXg@mail.gmail.com>",
+            "subject": "Subject: Looking for 2 bedroom apartment in Henderson",
+            "to": "To: requests@plexahousing.com",
+            "content-type": "Content-Type: multipart/alternative; boundary=\"0000000000005fb94b065e3bf6a8\""
+          },
+          "html": "<div dir=\"ltr\">Hi,<br><br>I&#39;m looking for a 2 bedroom apartment in Henderson, zip code 89052.<br>Need to move in by November 1st, 2026. Budget around $1,800/month.<br>Two adults, one small dog.<br><br>Thanks,<br>Brandon</div>\n",
+          "text": "Hi,\n\nI'm looking for a 2 bedroom apartment in Henderson, zip code 89052.\nNeed to move in by November 1st, 2026. Budget around $1,800/month.\nTwo adults, one small dog.\n\nThanks,\nBrandon\n",
+          "textAsHtml": "<p>Hi,</p><p>I&apos;m looking for a 2 bedroom apartment in Henderson, zip code 89052.<br/>Need to move in by November 1st, 2026. Budget around $1,800/month.<br/>Two adults, one small dog.</p><p>Thanks,<br/>Brandon</p>",
+          "subject": "Looking for 2 bedroom apartment in Henderson",
+          "date": "2026-10-20T01:57:58.000Z",
+          "to": {
+            "value": [
+              {
+                "address": "requests@plexahousing.com",
+                "name": ""
+              }
+            ],
+            "html": "<span class=\"mp_address_group\"><a href=\"mailto:requests@plexahousing.com\" class=\"mp_address_email\">requests@plexahousing.com</a></span>",
+            "text": "requests@plexahousing.com"
+          },
+          "from": {
+            "value": [
+              {
+                "address": "brandonkohler2000@gmail.com",
+                "name": "Brandon Kohler"
+              }
+            ],
+            "html": "<span class=\"mp_address_group\"><span class=\"mp_address_name\">Brandon Kohler</span> &lt;<a href=\"mailto:brandonkohler2000@gmail.com\" class=\"mp_address_email\">brandonkohler2000@gmail.com</a>&gt;</span>",
+            "text": "\"Brandon Kohler\" <brandonkohler2000@gmail.com>"
+          },
+          "messageId": "<CAJ5xoACy6AFSzhCbLa8EWOkVt9ajgWeEBwbgOP5fJdQxNqJiXg@mail.gmail.com>"
+        }
+      }
+    ],
+    "Build payload": [
+      {
+        "json": {
+          "sender_email": "brandon@zautom.com",
+          "sender_name": "Brandon Kohler",
+          "subject": "Looking for 2 bedroom apartment in Henderson",
+          "body_html": "<div dir=\"ltr\">Hi,<br><br>I&#39;m looking for a 2 bedroom apartment in Henderson, zip code 89052.<br>Need to move in by November 1st, 2026. Budget around $1,800/month.<br>Two adults, one small dog.<br><br>Thanks,<br>Brandon</div>\n",
+          "body_plain": "Hi,\n\nI'm looking for a 2 bedroom apartment in Henderson, zip code 89052.\nNeed to move in by November 1st, 2026. Budget around $1,800/month.\nTwo adults, one small dog.\n\nThanks,\nBrandon\n",
+          "message_id": "1a15707c1149df7a8",
+          "thread_id": "1a15707c11849df7a8",
+          "is_reply": false
+        }
+      }
+    ],
+    "POST /ingest": [
+      {
+        "json": {
+          "airtable_record_id": "recDEHLIAyg68Mexg",
+          "classification": "LEAD",
+          "email": {
+            "message_id": "1a15707c1149df7a8",
+            "sender_email": "brandon@zautom.com",
+            "sender_name": "Brandon Kohler",
+            "subject": "Looking for 2 bedroom apartment in Henderson",
+            "thread_id": "1a15707c11849df7a8"
+          },
+          "extraction": {
+            "adults": 2,
+            "amenities": null,
+            "bathrooms": null,
+            "bedrooms": 2,
+            "budget_max": 1980,
+            "budget_min": 1620,
+            "children": null,
+            "company_name": null,
+            "confidence": 0.9,
+            "duration_months": null,
+            "garage_required": null,
+            "garage_spaces": null,
+            "location": "Henderson, zip code 89052",
+            "missing_fields": [
+              "bathrooms",
+              "square_feet",
+              "duration_months",
+              "amenities",
+              "phone"
+            ],
+            "move_in_date": "2026-11-01",
+            "notes": "Core matching criteria all present: Henderson 89052, 2BR, ~$1,800/month budget (expanded to ±10%), move-in 2026-11-01, 2 adults, 1 small dog. No bathroom count, square footage, lease duration, or phone number provided. Email domain (zautom.com) is not a stated company affiliation; renter writes in first person for himself.",
+            "occupants": 2,
+            "pet_count": 1,
+            "pet_details": [
+              {
+                "description": "small",
+                "type": "Dog"
+              }
+            ],
+            "pet_friendly_required": true,
+            "pets": [
+              "1 dog"
+            ],
+            "phone": null,
+            "requester_type": "Individual",
+            "special_requests": null,
+            "square_feet": null,
+            "zip_code": "89052"
+          },
+          "is_duplicate": false,
+          "is_upgrade": false,
+          "match": {
+            "missing_fields": [],
+            "ready": true,
+            "request": {
+              "adults": "2",
+              "amenities": [],
+              "bathrooms": "",
+              "bedrooms": "2",
+              "children": "",
+              "company_holds_lease": "",
+              "company_name": "",
+              "connecting_client_directly": "",
+              "email": "brandon@zautom.com",
+              "first_name": "Brandon",
+              "garage_required": "",
+              "garage_spaces": "",
+              "last_name": "Kohler",
+              "lease_length": "",
+              "message_id": "1a15707c1149df7a8",
+              "move_in_date": "2026-11-01",
+              "pet_description": "small",
+              "pet_quantity": "1",
+              "pet_type": "Dog",
+              "pets": "Yes",
+              "phone": "",
+              "requester_type": "Individual",
+              "source": "email",
+              "special_requests": "",
+              "square_feet": "",
+              "thread_id": "1a15707c11849df7a8",
+              "zip_code": "89052"
+            }
+          },
+          "processing_time_ms": 20734.6,
+          "reply": {
+            "html": "\n    <div style=\"max-width:600px; margin:0 auto; font-family:Arial,sans-serif;\">\n      \n<div style=\"background-color:#1a365d; padding:20px 30px; border-radius:8px 8px 0 0;\">\n  <h1 style=\"color:#ffffff; margin:0; font-family:Arial,sans-serif; font-size:22px;\">\n    Plexa Housing\n  </h1>\n  <p style=\"color:#a0c4ff; margin:4px 0 0; font-family:Arial,sans-serif; font-size:13px;\">\n    Las Vegas Property Management\n  </p>\n</div>\n\n      <div style=\"padding:24px 30px; background:#ffffff;\">\n        \n    <p style=\"color:#334155; line-height:1.6;\">Hi Brandon,</p>\n    <p style=\"color:#334155; line-height:1.6;\">\n      Thanks for reaching out! We've got everything we need to start looking for the right place for you.\n      Here's what we picked up from your message:\n    </p>\n    \n    <table style=\"width:100%; border-collapse:collapse; background:#f8fafc; border-radius:6px; margin:16px 0;\">\n      <thead><tr><td colspan=\"2\" style=\"padding:10px 12px; font-weight:bold; color:#1a365d; border-bottom:1px solid #e2e8f0;\">\n        What We Heard\n      </td></tr></thead>\n      <tbody><tr><td style=\"padding:6px 12px; color:#64748b; font-size:13px;\">Location</td><td style=\"padding:6px 12px; font-weight:bold; font-size:13px;\">Henderson, zip code 89052</td></tr><tr><td style=\"padding:6px 12px; color:#64748b; font-size:13px;\">Zip Code</td><td style=\"padding:6px 12px; font-weight:bold; font-size:13px;\">89052</td></tr><tr><td style=\"padding:6px 12px; color:#64748b; font-size:13px;\">Bedrooms</td><td style=\"padding:6px 12px; font-weight:bold; font-size:13px;\">2</td></tr><tr><td style=\"padding:6px 12px; color:#64748b; font-size:13px;\">Budget</td><td style=\"padding:6px 12px; font-weight:bold; font-size:13px;\">$1,620 – $1,980/mo</td></tr><tr><td style=\"padding:6px 12px; color:#64748b; font-size:13px;\">Move-in Date</td><td style=\"padding:6px 12px; font-weight:bold; font-size:13px;\">2026-11-01</td></tr><tr><td style=\"padding:6px 12px; color:#64748b; font-size:13px;\">Pets</td><td style=\"padding:6px 12px; font-weight:bold; font-size:13px;\">1 dog</td></tr><tr><td style=\"padding:6px 12px; color:#64748b; font-size:13px;\">Occupants</td><td style=\"padding:6px 12px; font-weight:bold; font-size:13px;\">2</td></tr></tbody>\n    </table>\n    \n    <p style=\"color:#334155; line-height:1.6;\">\n      We're already running a match against our available properties. You'll hear back from us shortly\n      with options that fit your criteria.\n    </p>\n    <p style=\"color:#334155; line-height:1.6;\">Talk soon,<br><strong>Ryan</strong><br>Plexa Housing</p>\n    \n      </div>\n      \n<div style=\"background-color:#f0f4f8; padding:16px 30px; border-radius:0 0 8px 8px; border-top:1px solid #e2e8f0;\">\n  <p style=\"color:#64748b; font-family:Arial,sans-serif; font-size:12px; margin:0;\">\n    Plexa Housing · Las Vegas, NV<br>\n    This is an automated message. Reply to this email and a team member will follow up.\n  </p>\n</div>\n\n    </div>\n    ",
+            "should_send": true,
+            "skip_reason": "auto_reply_disabled",
+            "subject": "Re: Looking for 2 bedroom apartment in Henderson"
+          },
+          "sender": "Brandon Kohler <brandon@zautom.com>",
+          "status": "New",
+          "subject": "Looking for 2 bedroom apartment in Henderson",
+          "tier": "Tier 1",
+          "tokens": {
+            "extraction": 2932,
+            "junk_filter": 405,
+            "total": 3337
+          }
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "Build payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build payload": {
+      "main": [
+        [
+          {
+            "node": "POST /ingest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST /ingest": {
+      "main": [
+        [
+          {
+            "node": "Log: Intake Result",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Needs attention?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log: Ingest Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs attention?": {
+      "main": [
+        [
+          {
+            "node": "Label Needs Attention",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Should reply?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should reply?": {
+      "main": [
+        [
+          {
+            "node": "Build approval",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Label Processed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build approval": {
+      "main": [
+        [
+          {
+            "node": "Approve reply?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approve reply?": {
+      "main": [
+        [
+          {
+            "node": "Approved?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approved?": {
+      "main": [
+        [
+          {
+            "node": "Gmail Reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log: Reply Declined",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Label Processed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail Reply": {
+      "main": [
+        [
+          {
+            "node": "Label Processed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log: Reply Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Label Processed": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Match ready?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Match ready?": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log: Hand-off",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Log: Hand-off",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log: Hand-off",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log: Ingest Failed": {
+      "main": [
+        [
+          {
+            "node": "Logger (ingest)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log: Intake Result": {
+      "main": [
+        [
+          {
+            "node": "Logger (intake)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log: Reply Declined": {
+      "main": [
+        [
+          {
+            "node": "Logger (approval)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log: Reply Failed": {
+      "main": [
+        [
+          {
+            "node": "Logger (reply)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log: Hand-off": {
+      "main": [
+        [
+          {
+            "node": "Logger (match)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "errorWorkflow": "Ieh5daVRpSFe3GVm",
+    "timezone": "America/Los_Angeles"
+  },
+  "versionId": "63863cf4-1f4b-436c-aee3-cfb025349b72",
+  "meta": {
+    "instanceId": "ac5b0d8804c1f923ecf9119739b1f167fd959dfb066fb99f38c7bb014f49e6e9"
+  },
+  "nodeGroups": [],
+  "id": "SHDoClNVDjqFQtC3",
+  "tags": []
+}

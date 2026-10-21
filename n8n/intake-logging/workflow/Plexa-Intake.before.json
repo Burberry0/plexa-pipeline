@@ -1,0 +1,851 @@
+{
+  "name": "Plexa Intake",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "simple": false,
+        "filters": {
+          "labelIds": [
+            "INBOX"
+          ],
+          "readStatus": "both"
+        },
+        "options": {
+          "downloadAttachments": false
+        }
+      },
+      "id": "i1",
+      "name": "Gmail Trigger",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "XQNqvnyHEyYX0fBJ",
+          "name": "request@plexa"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "p1",
+              "name": "sender_email",
+              "type": "string",
+              "value": "={{ $json.from.value[0].address }}"
+            },
+            {
+              "id": "p2",
+              "name": "sender_name",
+              "type": "string",
+              "value": "={{ $json.from.value[0].name || '' }}"
+            },
+            {
+              "id": "p3",
+              "name": "subject",
+              "type": "string",
+              "value": "={{ $json.subject || '' }}"
+            },
+            {
+              "id": "p4",
+              "name": "body_html",
+              "type": "string",
+              "value": "={{ $json.html || '' }}"
+            },
+            {
+              "id": "p5",
+              "name": "body_plain",
+              "type": "string",
+              "value": "={{ $json.text || '' }}"
+            },
+            {
+              "id": "p6",
+              "name": "message_id",
+              "type": "string",
+              "value": "={{ $json.id }}"
+            },
+            {
+              "id": "p7",
+              "name": "thread_id",
+              "type": "string",
+              "value": "={{ $json.threadId }}"
+            },
+            {
+              "id": "p8",
+              "name": "is_reply",
+              "type": "boolean",
+              "value": "={{ ($json.subject || '').toLowerCase().startsWith('re:') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "i2",
+      "name": "Build payload",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://plexa-pipeline.vercel.app/ingest",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 200
+            }
+          },
+          "timeout": 90000
+        }
+      },
+      "id": "i3",
+      "name": "POST /ingest",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000,
+      "position": [
+        480,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "qbNGNZK6Q5HnbsNq",
+          "name": "Plexa Webhook Secret"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $json;\nconst p = $('Build payload').item.json;\nconst who = `${p.sender_name ? p.sender_name + ' ' : ''}<${p.sender_email}>`;\nlet text;\nif (r.is_duplicate) {\n  text = `:repeat: Duplicate skipped — ${who} — \"${p.subject}\"`;\n} else if (r.classification === 'JUNK') {\n  text = `:wastebasket: JUNK — ${who} — \"${p.subject}\"`;\n} else {\n  const e = r.extraction || {};\n  const rep = r.reply || {};\n  const fmt = v => (v === null || v === undefined || v === '') ? '—'\n    : (Array.isArray(v) ? (v.length ? v.join(', ') : 'none') : String(v));\n  const money = (a, b) => (a == null && b == null) ? '—' : `${a != null ? '$' + a : '?'} – ${b != null ? '$' + b : '?'}`;\n  const needs = r.status === 'Manual Review' ? ('YES' + (r.error ? ' — ' + r.error : '')) : 'no';\n  const reply = rep.should_send ? 'SEND → awaiting approval in Slack' : `skip (${rep.skip_reason || '—'})`;\n  const lines = [\n    `:mag: *${r.classification}*${r.tier ? ' · ' + r.tier : ''} · ${r.status} — ${who} — \"${p.subject}\"`,\n    `• Location: ${fmt(e.location)} | Bedrooms: ${fmt(e.bedrooms)} | Budget: ${money(e.budget_min, e.budget_max)}`,\n    `• Move-in: ${fmt(e.move_in_date)} | Pets: ${fmt(e.pets)} | Occupants: ${fmt(e.occupants)} | Duration: ${fmt(e.duration_months)} mo`,\n    `• Confidence: ${fmt(e.confidence)} | Missing: ${fmt(e.missing_fields)}`,\n    e.notes ? `• Notes: ${e.notes}` : null,\n    r.is_upgrade ? '• Upgrade from Tier 3' : null,\n    `• Needs attention: ${needs}`,\n    `• Reply decision: ${reply}`,\n  ].filter(Boolean);\n  text = lines.join('\\n');\n}\nreturn [{ json: { text } }];"
+      },
+      "id": "i9",
+      "name": "Build log",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        -224
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://hooks.slack.com/services/REDACTED/REDACTED/REDACTED",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: $json.text }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "i10",
+      "name": "Slack log",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        960,
+        -224
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "i4c",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "Manual Review",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "i4",
+      "name": "Needs attention?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        720,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "addLabels",
+        "messageId": "={{ $('Build payload').item.json.message_id }}",
+        "labelIds": [
+          "Label_121382909490854740"
+        ]
+      },
+      "id": "i5",
+      "name": "Label Needs Attention",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        960,
+        -48
+      ],
+      "webhookId": "4c31f20d-ff63-4fca-ab85-25d7d44a8212",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "XQNqvnyHEyYX0fBJ",
+          "name": "request@plexa"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "i6c",
+              "leftValue": "={{ $json.reply.should_send }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "i6",
+      "name": "Should reply?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1008,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $('POST /ingest').item.json;\nconst p = $('Build payload').item.json;\n\nconst strip = (h) =>\n  (h || '')\n    .replace(/<style[\\s\\S]*?<\\/style>/gi, '')\n    .replace(/<br\\s*\\/?>/gi, '\\n')\n    .replace(/<\\/(p|div|tr|h\\d|li|table)>/gi, '\\n')\n    .replace(/<[^>]+>/g, '')\n    .replace(/&nbsp;/g, ' ')\n    .replace(/&amp;/g, '&')\n    .replace(/&lt;/g, '<')\n    .replace(/&gt;/g, '>')\n    .replace(/&#x27;|&#39;/g, \"'\")\n    .replace(/&quot;/g, '\"')\n    .replace(/[ \\t]+\\n/g, '\\n')\n    .replace(/\\n{3,}/g, '\\n\\n')\n    .trim();\n\nconst quote = (s) =>\n  String(s || '')\n    .split('\\n')\n    .map((l) => '> ' + l)\n    .join('\\n');\n\nconst money = (n) => {\n  if (n == null || n === '') return null;\n  const num = Number(n);\n  if (!Number.isFinite(num)) return null;\n  return '$' + num.toLocaleString('en-US', { maximumFractionDigits: 0 });\n};\n\nconst fmtBudget = (min, max) => {\n  const a = money(min);\n  const b = money(max);\n  if (a && b) return `${a} – ${b}/mo`;\n  if (b) return `up to ${b}/mo`;\n  if (a) return `from ${a}/mo`;\n  return null;\n};\n\nconst fmtPets = (pets) => {\n  if (pets == null) return null;\n  if (Array.isArray(pets)) {\n    if (pets.length === 0) return 'None';\n    return pets.join(', ');\n  }\n  return String(pets);\n};\n\n/** Always \"Key: Value\" with a space after the colon. Skip blanks. */\nconst line = (key, value) => {\n  if (value == null) return null;\n  const v = String(value).trim();\n  if (!v) return null;\n  return `${key}: ${v}`;\n};\n\nconst lines = (pairs) =>\n  pairs.map(([k, v]) => line(k, v)).filter(Boolean).join('\\n');\n\nconst x = r.extraction || {};\nconst m = r.match || {};\nconst reply = r.reply || {};\n\nconst inbound =\n  p.body_plain && p.body_plain.trim()\n    ? p.body_plain.trim()\n    : strip(p.body_html);\nconst replyText = strip(reply.html);\n\nconst matchDetail = m.ready\n  ? `YES (zip ${(m.request && m.request.zip_code) || x.zip_code || '?'}, ${(m.request && m.request.bedrooms) || x.bedrooms || '?'}BR, move-in ${(m.request && m.request.move_in_date) || x.move_in_date || '?'})`\n  : `no (missing: ${(m.missing_fields || []).join(', ') || 'unknown'})`;\n\nconst header = lines([\n  ['Action', 'Reply approval needed'],\n  ['Tier', r.tier],\n  ['Sender', `${p.sender_name || ''} <${p.sender_email}>`.trim()],\n  ['Subject', p.subject],\n  ['Status', r.status],\n  ['Match Ready', m.ready ? 'yes' : 'no'],\n]);\n\nconst extracted = lines([\n  ['Location', x.location],\n  ['Zip Code', x.zip_code],\n  ['Bedrooms', x.bedrooms != null ? x.bedrooms : null],\n  ['Bathrooms', x.bathrooms != null ? x.bathrooms : null],\n  ['Budget', fmtBudget(x.budget_min, x.budget_max)],\n  ['Move-in Date', x.move_in_date],\n  ['Pets', fmtPets(x.pets)],\n  ['Occupants', x.occupants != null ? x.occupants : null],\n  ['Adults', x.adults != null ? x.adults : null],\n  ['Children', x.children != null ? x.children : null],\n  ['Duration', x.duration_months != null ? `${x.duration_months} months` : null],\n  ['Phone', x.phone],\n  ['Requester', x.requester_type],\n  ['Company', x.company_name],\n  [\n    'Amenities',\n    Array.isArray(x.amenities) && x.amenities.length\n      ? x.amenities.join(', ')\n      : null,\n  ],\n  ['Special Requests', x.special_requests],\n]);\n\nconst footer = lines([\n  ['Reply Subject', reply.subject],\n  ['Property Match on Approve', matchDetail],\n]);\n\nconst text = [\n  ':envelope_with_arrow: *Reply approval needed*',\n  '',\n  header,\n  extracted ? `\\n${extracted}` : '',\n  '',\n  '*Inbound email:*',\n  quote(inbound.slice(0, 1500)),\n  '',\n  '*Proposed reply:*',\n  quote(replyText.slice(0, 2000)),\n  footer ? `\\n${footer}` : '',\n]\n  .join('\\n')\n  .replace(/\\n{3,}/g, '\\n\\n')\n  .trim();\n\nreturn [{ json: { text } }];"
+      },
+      "id": "i11",
+      "name": "Build approval",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1216,
+        -32
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "C0C7D439R5J"
+        },
+        "message": "={{ $json.text }}",
+        "approvalOptions": {
+          "values": {
+            "approvalType": "double",
+            "approveLabel": "Approve & send"
+          }
+        },
+        "options": {
+          "limitWaitTime": {
+            "values": {
+              "resumeAmount": 24
+            }
+          }
+        }
+      },
+      "id": "i12",
+      "name": "Approve reply?",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        1456,
+        -32
+      ],
+      "webhookId": "a32130af-dc1a-41a5-b920-9922614374ab",
+      "credentials": {
+        "slackApi": {
+          "id": "4Nhfah1Q0WBV00od",
+          "name": "Plexa Slack Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "i13c",
+              "leftValue": "={{ $json.data && $json.data.approved === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "i13",
+      "name": "Approved?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1696,
+        -32
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "reply",
+        "messageId": "={{ $('Build payload').item.json.message_id }}",
+        "message": "={{ $('POST /ingest').item.json.reply.html }}",
+        "options": {
+          "replyToSenderOnly": true
+        }
+      },
+      "id": "i7",
+      "name": "Gmail Reply",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1952,
+        -256
+      ],
+      "webhookId": "99a08ce7-cb03-4ffa-a4b7-04c380956397",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "XQNqvnyHEyYX0fBJ",
+          "name": "request@plexa"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://hooks.slack.com/services/REDACTED/REDACTED/REDACTED",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: ':no_entry: Reply declined (or approval timed out) for ' + $('Build payload').item.json.sender_email + ' — \"' + $('Build payload').item.json.subject + '\". Nothing sent.' }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "i14",
+      "name": "Slack declined",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1952,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "addLabels",
+        "messageId": "={{ $('Build payload').item.json.message_id }}",
+        "labelIds": [
+          "Label_6663289192800495718"
+        ]
+      },
+      "id": "i8",
+      "name": "Label Processed",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        2208,
+        -32
+      ],
+      "webhookId": "c564cf2a-bc82-4901-9f9c-8d4312b801d0",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "XQNqvnyHEyYX0fBJ",
+          "name": "request@plexa"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c987d1e3-e429-4c5c-87f5-63092780f79b",
+              "leftValue": "={{ $('Approved?').item.json.data.approved }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2416,
+        -32
+      ],
+      "id": "7a56aa3b-8b1b-47ee-991b-f201c5710600",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://plexahousing.app.n8n.cloud/webhook/intake-email",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "value": "={{ JSON.stringify($('POST /ingest').item.json.match.request) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        2688,
+        -224
+      ],
+      "id": "5093c0a8-576e-4c3c-9023-2a7f45f7954a",
+      "name": "HTTP Request"
+    }
+  ],
+  "pinData": {
+    "Gmail Trigger": [
+      {
+        "json": {
+          "id": "1a15707c849df7a8",
+          "threadId": "1a15707c849df7a8",
+          "labelIds": [
+            "UNREAD",
+            "IMPORTANT",
+            "CATEGORY_PERSONAL",
+            "INBOX"
+          ],
+          "sizeEstimate": 7546,
+          "headers": {
+            "delivered-to": "Delivered-To: requests@plexahousing.com",
+            "received": "Received: from mail-sor-f41.google.com (mail-sor-f41.google.com. [209.85.220.41])\r\n        by mx.google.com with SMTPS id a640c23a62f3a-c45c917be32sor47985166b.11.2026.10.19.18.58.10\r\n        for <requests@plexahousing.com>\r\n        (Google Transport Security);\r\n        Mon, 19 Oct 2026 18:58:10 -0700 (PDT)",
+            "x-received": "X-Received: by 2002:a17:906:d54d:b0:c3e:34fa:611d with SMTP id\r\n a640c23a62f3a-c419f609eecmr660903066b.35.1792461489812; Mon, 19 Oct 2026\r\n 18:58:09 -0700 (PDT)",
+            "arc-seal": "ARC-Seal: i=1; a=rsa-sha256; t=1792461490; cv=none;\r\n        d=google.com; s=arc-20260327;\r\n        b=P6t4LsStMxw0och7WFsOVhIa9T3ozrtYUbUz1JGMP/IBDR0wIxrwF6C+EmfK2iqLpy\r\n         m+BMxnhAAJGdiVlGJMDoYuO/0EF19sNlkDBhhYa83a1A/6NETpvmTWeLiVgiYd2HRP2w\r\n         JQDASaQZdie0VDTPIf55IFafqksYhN+treqnqZCnlRn7KHt9qoFEqROaGRVP+fFRw1dT\r\n         gXsGm7Fp6KC3cmLZNgAjsfZJDwVbyf/RtfYpvQ+Qmes8DB8QhnTTPE9jTNAh5qMEjfsp\r\n         HnklIwBucJJnWLJUUPlBAsVPHqrr4NCjMEBF9usDeqTjJ92AC8rOxLzulyVeQlW55c6j\r\n         8hBQ==",
+            "arc-message-signature": "ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=google.com; s=arc-20260327;\r\n        h=to:subject:message-id:date:from:mime-version:dkim-signature;\r\n        bh=tWnT0daPs4vuxAxFCc9LLy1n6xtLCzFwBFuMKiC8qxg=;\r\n        fh=NE0+cyAfIUnxxh16PEjbDA9HK7Q4paZXa6tXUjpzq0I=;\r\n        b=VLIEQKyOeMG5j3DTNBFvNEq+LAv3awBYk+o8wRwbe5nMgJpvXNKxC8KN0TePQO53/6\r\n         YgsVPTBTteRxaLmcGiXzSnmhJ+TAa8csN5BDOiwmYdqQ0s1bbZ70wEdw/2fE5957vI3A\r\n         eJ9PLa3J++grNAwkkMFFdv1hH32ANCitC5Fz2mnu0KAj29YhzhsHBT3F+xNCzv9wYs/A\r\n         WKBA95cBVcc2UnV1P3gn1A+77ny4CMv3lcHnN6Souh0r2DClpoZEsiZ5MAY7xfKaFhwJ\r\n         kyBJxg/P1LSUhvjyN/n9L9V1QIEuxIPBxUY6UTxoGSPf8nio78HrptONA9MpJb1u9OGR\r\n         8GDA==;\r\n        darn=plexahousing.com",
+            "arc-authentication-results": "ARC-Authentication-Results: i=1; mx.google.com; arc=none",
+            "return-path": "Return-Path: <brandonkohler2000@gmail.com>",
+            "received-spf": "Received-SPF: pass (google.com: domain of brandonkohler2000@gmail.com designates 209.85.220.41 as permitted sender) client-ip=209.85.220.41;",
+            "authentication-results": "Authentication-Results: mx.google.com;\r\n       dkim=pass header.i=@gmail.com header.s=20251104 header.b=TkrfpFxU;\r\n       arc=pass (i=1);\r\n       spf=pass (google.com: domain of brandonkohler2000@gmail.com designates 209.85.220.41 as permitted sender) smtp.mailfrom=brandonkohler2000@gmail.com;\r\n       dmarc=pass (p=NONE sp=QUARANTINE dis=NONE) header.from=gmail.com;\r\n       dara=neutral header.i=@plexahousing.com",
+            "dkim-signature": "DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;\r\n        d=gmail.com; s=20251104; t=1792461490; x=1793066290; darn=plexahousing.com;\r\n        h=content-type:to:subject:message-id:date:from:mime-version:from:to\r\n         :cc:subject:date:message-id:reply-to:content-type;\r\n        bh=tWnT0daPs4vuxAxFCc9LLy1n6xtLCzFwBFuMKiC8qxg=;\r\n        b=TkrfpFxUG5QcWIn+X7GHKmLtw3zR73O8b/PQn4vM6wP+3kUXzZrauTaoyL6G13AKjd\r\n         a5z2EVds+HeEq6omSFVJDQ/v5Sy0G3JZ3MsJBlNcbvT5biDnE9Ks+3lRnoXCR5a1vshx\r\n         RocTi08Lb3Lp5ttpX5w7XmpMWc309pKZKJCTt9ku6xnm77v2oNLkrYMUrDgAxRtAWzkE\r\n         dKevLqiHxuHozqhcv5gAT/mhhPr1fZ4WzrU85A+G1m9QeJSoTk0kRqZ/ES9Q0iY1DFaD\r\n         3X1n1ceuNaLoOeMju228WngEBzMmPsqdQqsHyOrDvqIlK01puPH55Md6L7/BGaO44h8y\r\n         1Ufw==",
+            "x-google-dkim-signature": "X-Google-DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;\r\n        d=1e100.net; s=20260707; t=1792461490; x=1793066290;\r\n        h=content-type:to:subject:message-id:date:from:mime-version:x-gm-gg\r\n         :x-gm-message-state:from:to:cc:subject:date:message-id:reply-to\r\n         :content-type;\r\n        bh=tWnT0daPs4vuxAxFCc9LLy1n6xtLCzFwBFuMKiC8qxg=;\r\n        b=B2vd2GZ+RgbSMCxj/UdLJJ65AjO03Lk3jbEQeSAvpkAWDrAZAVOsIDtu+VcH0hLIx/\r\n         lXBPGxJ8UqNsyp6vDFZ9WAqWy4h7KJ3oX2O4XNoWmBxUQeSqBclAVyE7K2mIv88gqbMs\r\n         ZrdG6VxFbmva8eWPye2L5fboam3Ckx7V3O6jcS8MMhPDD2nBHlk+1WtZD4kz5AeVwWYF\r\n         /+kXpmj19MQRyHeFtPwu5c07ZMcyVWILX7ScLnsd5hqS1H/vH4jGKIIfGN/Jen30qgpp\r\n         2lWMsg9NIpcRMjq6DBz4IqcU5zriMcDiV+sti01nAU7Iy9wJnQBdRHKXtfzI/VbRSyRW\r\n         X7og==",
+            "x-gm-message-state": "X-Gm-Message-State: AFq9FYKeScEctjAXPptyMGtKh7TEZwgwnRvwoM9sz9UP7N+L4TZAnmzI\r\n\tWeh/Y3uk1FaLxleUFqF/W+OdlO9KKDHsPoFFSad7bnLTPEl+OXRbeGuWM93SHVMLq2cKL5Tcjx9\r\n\twObPxUJviwNaxPRWACLtynblC87Xet4nLiJF5",
+            "x-gm-gg": "X-Gm-Gg: AYBFou3FJx+0IOFxQZzyWC4F4bnOoQBhVNtU+LN/uJy5GGcRiMtmUOJwJOOw5R3hDUe\r\n\tktSAQ089Ll0+rORoM5j9hBPHZJGTMieIkIcjp3K98Z8W0AAEDQ3h6EXG8NcHVqOvvf/b9A6Gdra\r\n\tRle9ZW37bJqxu0O/Ouv76CTSzir16dRoVYU4JRRdsJZM40Ba41e2/oEFhiVSzYJXq+KdYPLLQST\r\n\thzmuMQIDgKRoNDeWIZ2uhnIKKMmxh4lycqdYvgE0+bhSQyIFad2JKqutfEUmZfzFprPkv7balb5\r\n\tq6Y4vcvYcx41qSy2gNjBgWsH8vfikCCcA5rXnSS5f9O7/BUHup2Q9Fg7goeHbccwYhhkjDAtRt7\r\n\tYbi+XVoefd4EWi4yc3agDY5o+CEP1GsGYwlcB32uAfg==",
+            "mime-version": "MIME-Version: 1.0",
+            "from": "From: Brandon Kohler <brandonkohler2000@gmail.com>",
+            "date": "Date: Mon, 19 Oct 2026 21:57:58 -0400",
+            "x-gm-features": "X-Gm-Features: AclHuK-SjkEDTNAnNFv3OwU88zbsNeh3Rht0QFhxvUA3M5DmUEjAo8RrxR_bIic",
+            "message-id": "Message-ID: <CAJ5xoACy6AFSzhCbLa8EWOkVt9ajgWeEBwbgOP5fJdQxNqJiXg@mail.gmail.com>",
+            "subject": "Subject: Looking for 2 bedroom apartment in Henderson",
+            "to": "To: requests@plexahousing.com",
+            "content-type": "Content-Type: multipart/alternative; boundary=\"0000000000005fb94b065e3bf6a8\""
+          },
+          "html": "<div dir=\"ltr\">Hi,<br><br>I&#39;m looking for a 2 bedroom apartment in Henderson, zip code 89052.<br>Need to move in by November 1st, 2026. Budget around $1,800/month.<br>Two adults, one small dog.<br><br>Thanks,<br>Brandon</div>\n",
+          "text": "Hi,\n\nI'm looking for a 2 bedroom apartment in Henderson, zip code 89052.\nNeed to move in by November 1st, 2026. Budget around $1,800/month.\nTwo adults, one small dog.\n\nThanks,\nBrandon\n",
+          "textAsHtml": "<p>Hi,</p><p>I&apos;m looking for a 2 bedroom apartment in Henderson, zip code 89052.<br/>Need to move in by November 1st, 2026. Budget around $1,800/month.<br/>Two adults, one small dog.</p><p>Thanks,<br/>Brandon</p>",
+          "subject": "Looking for 2 bedroom apartment in Henderson",
+          "date": "2026-10-20T01:57:58.000Z",
+          "to": {
+            "value": [
+              {
+                "address": "requests@plexahousing.com",
+                "name": ""
+              }
+            ],
+            "html": "<span class=\"mp_address_group\"><a href=\"mailto:requests@plexahousing.com\" class=\"mp_address_email\">requests@plexahousing.com</a></span>",
+            "text": "requests@plexahousing.com"
+          },
+          "from": {
+            "value": [
+              {
+                "address": "brandonkohler2000@gmail.com",
+                "name": "Brandon Kohler"
+              }
+            ],
+            "html": "<span class=\"mp_address_group\"><span class=\"mp_address_name\">Brandon Kohler</span> &lt;<a href=\"mailto:brandonkohler2000@gmail.com\" class=\"mp_address_email\">brandonkohler2000@gmail.com</a>&gt;</span>",
+            "text": "\"Brandon Kohler\" <brandonkohler2000@gmail.com>"
+          },
+          "messageId": "<CAJ5xoACy6AFSzhCbLa8EWOkVt9ajgWeEBwbgOP5fJdQxNqJiXg@mail.gmail.com>"
+        }
+      }
+    ],
+    "Build payload": [
+      {
+        "json": {
+          "sender_email": "brandon@zautom.com",
+          "sender_name": "Brandon Kohler",
+          "subject": "Looking for 2 bedroom apartment in Henderson",
+          "body_html": "<div dir=\"ltr\">Hi,<br><br>I&#39;m looking for a 2 bedroom apartment in Henderson, zip code 89052.<br>Need to move in by November 1st, 2026. Budget around $1,800/month.<br>Two adults, one small dog.<br><br>Thanks,<br>Brandon</div>\n",
+          "body_plain": "Hi,\n\nI'm looking for a 2 bedroom apartment in Henderson, zip code 89052.\nNeed to move in by November 1st, 2026. Budget around $1,800/month.\nTwo adults, one small dog.\n\nThanks,\nBrandon\n",
+          "message_id": "1a15707c1149df7a8",
+          "thread_id": "1a15707c11849df7a8",
+          "is_reply": false
+        }
+      }
+    ],
+    "POST /ingest": [
+      {
+        "json": {
+          "airtable_record_id": "recDEHLIAyg68Mexg",
+          "classification": "LEAD",
+          "email": {
+            "message_id": "1a15707c1149df7a8",
+            "sender_email": "brandon@zautom.com",
+            "sender_name": "Brandon Kohler",
+            "subject": "Looking for 2 bedroom apartment in Henderson",
+            "thread_id": "1a15707c11849df7a8"
+          },
+          "extraction": {
+            "adults": 2,
+            "amenities": null,
+            "bathrooms": null,
+            "bedrooms": 2,
+            "budget_max": 1980,
+            "budget_min": 1620,
+            "children": null,
+            "company_name": null,
+            "confidence": 0.9,
+            "duration_months": null,
+            "garage_required": null,
+            "garage_spaces": null,
+            "location": "Henderson, zip code 89052",
+            "missing_fields": [
+              "bathrooms",
+              "square_feet",
+              "duration_months",
+              "amenities",
+              "phone"
+            ],
+            "move_in_date": "2026-11-01",
+            "notes": "Core matching criteria all present: Henderson 89052, 2BR, ~$1,800/month budget (expanded to ±10%), move-in 2026-11-01, 2 adults, 1 small dog. No bathroom count, square footage, lease duration, or phone number provided. Email domain (zautom.com) is not a stated company affiliation; renter writes in first person for himself.",
+            "occupants": 2,
+            "pet_count": 1,
+            "pet_details": [
+              {
+                "description": "small",
+                "type": "Dog"
+              }
+            ],
+            "pet_friendly_required": true,
+            "pets": [
+              "1 dog"
+            ],
+            "phone": null,
+            "requester_type": "Individual",
+            "special_requests": null,
+            "square_feet": null,
+            "zip_code": "89052"
+          },
+          "is_duplicate": false,
+          "is_upgrade": false,
+          "match": {
+            "missing_fields": [],
+            "ready": true,
+            "request": {
+              "adults": "2",
+              "amenities": [],
+              "bathrooms": "",
+              "bedrooms": "2",
+              "children": "",
+              "company_holds_lease": "",
+              "company_name": "",
+              "connecting_client_directly": "",
+              "email": "brandon@zautom.com",
+              "first_name": "Brandon",
+              "garage_required": "",
+              "garage_spaces": "",
+              "last_name": "Kohler",
+              "lease_length": "",
+              "message_id": "1a15707c1149df7a8",
+              "move_in_date": "2026-11-01",
+              "pet_description": "small",
+              "pet_quantity": "1",
+              "pet_type": "Dog",
+              "pets": "Yes",
+              "phone": "",
+              "requester_type": "Individual",
+              "source": "email",
+              "special_requests": "",
+              "square_feet": "",
+              "thread_id": "1a15707c11849df7a8",
+              "zip_code": "89052"
+            }
+          },
+          "processing_time_ms": 20734.6,
+          "reply": {
+            "html": "\n    <div style=\"max-width:600px; margin:0 auto; font-family:Arial,sans-serif;\">\n      \n<div style=\"background-color:#1a365d; padding:20px 30px; border-radius:8px 8px 0 0;\">\n  <h1 style=\"color:#ffffff; margin:0; font-family:Arial,sans-serif; font-size:22px;\">\n    Plexa Housing\n  </h1>\n  <p style=\"color:#a0c4ff; margin:4px 0 0; font-family:Arial,sans-serif; font-size:13px;\">\n    Las Vegas Property Management\n  </p>\n</div>\n\n      <div style=\"padding:24px 30px; background:#ffffff;\">\n        \n    <p style=\"color:#334155; line-height:1.6;\">Hi Brandon,</p>\n    <p style=\"color:#334155; line-height:1.6;\">\n      Thanks for reaching out! We've got everything we need to start looking for the right place for you.\n      Here's what we picked up from your message:\n    </p>\n    \n    <table style=\"width:100%; border-collapse:collapse; background:#f8fafc; border-radius:6px; margin:16px 0;\">\n      <thead><tr><td colspan=\"2\" style=\"padding:10px 12px; font-weight:bold; color:#1a365d; border-bottom:1px solid #e2e8f0;\">\n        What We Heard\n      </td></tr></thead>\n      <tbody><tr><td style=\"padding:6px 12px; color:#64748b; font-size:13px;\">Location</td><td style=\"padding:6px 12px; font-weight:bold; font-size:13px;\">Henderson, zip code 89052</td></tr><tr><td style=\"padding:6px 12px; color:#64748b; font-size:13px;\">Zip Code</td><td style=\"padding:6px 12px; font-weight:bold; font-size:13px;\">89052</td></tr><tr><td style=\"padding:6px 12px; color:#64748b; font-size:13px;\">Bedrooms</td><td style=\"padding:6px 12px; font-weight:bold; font-size:13px;\">2</td></tr><tr><td style=\"padding:6px 12px; color:#64748b; font-size:13px;\">Budget</td><td style=\"padding:6px 12px; font-weight:bold; font-size:13px;\">$1,620 – $1,980/mo</td></tr><tr><td style=\"padding:6px 12px; color:#64748b; font-size:13px;\">Move-in Date</td><td style=\"padding:6px 12px; font-weight:bold; font-size:13px;\">2026-11-01</td></tr><tr><td style=\"padding:6px 12px; color:#64748b; font-size:13px;\">Pets</td><td style=\"padding:6px 12px; font-weight:bold; font-size:13px;\">1 dog</td></tr><tr><td style=\"padding:6px 12px; color:#64748b; font-size:13px;\">Occupants</td><td style=\"padding:6px 12px; font-weight:bold; font-size:13px;\">2</td></tr></tbody>\n    </table>\n    \n    <p style=\"color:#334155; line-height:1.6;\">\n      We're already running a match against our available properties. You'll hear back from us shortly\n      with options that fit your criteria.\n    </p>\n    <p style=\"color:#334155; line-height:1.6;\">Talk soon,<br><strong>Ryan</strong><br>Plexa Housing</p>\n    \n      </div>\n      \n<div style=\"background-color:#f0f4f8; padding:16px 30px; border-radius:0 0 8px 8px; border-top:1px solid #e2e8f0;\">\n  <p style=\"color:#64748b; font-family:Arial,sans-serif; font-size:12px; margin:0;\">\n    Plexa Housing · Las Vegas, NV<br>\n    This is an automated message. Reply to this email and a team member will follow up.\n  </p>\n</div>\n\n    </div>\n    ",
+            "should_send": true,
+            "skip_reason": "auto_reply_disabled",
+            "subject": "Re: Looking for 2 bedroom apartment in Henderson"
+          },
+          "sender": "Brandon Kohler <brandon@zautom.com>",
+          "status": "New",
+          "subject": "Looking for 2 bedroom apartment in Henderson",
+          "tier": "Tier 1",
+          "tokens": {
+            "extraction": 2932,
+            "junk_filter": 405,
+            "total": 3337
+          }
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "Build payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build payload": {
+      "main": [
+        [
+          {
+            "node": "POST /ingest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST /ingest": {
+      "main": [
+        [
+          {
+            "node": "Build log",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Needs attention?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build log": {
+      "main": [
+        [
+          {
+            "node": "Slack log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs attention?": {
+      "main": [
+        [
+          {
+            "node": "Label Needs Attention",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Should reply?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should reply?": {
+      "main": [
+        [
+          {
+            "node": "Build approval",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Label Processed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build approval": {
+      "main": [
+        [
+          {
+            "node": "Approve reply?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approve reply?": {
+      "main": [
+        [
+          {
+            "node": "Approved?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approved?": {
+      "main": [
+        [
+          {
+            "node": "Gmail Reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Slack declined",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail Reply": {
+      "main": [
+        [
+          {
+            "node": "Label Processed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack declined": {
+      "main": [
+        [
+          {
+            "node": "Label Processed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Label Processed": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "errorWorkflow": "Ieh5daVRpSFe3GVm",
+    "timezone": "America/Los_Angeles"
+  },
+  "versionId": "63863cf4-1f4b-436c-aee3-cfb025349b72",
+  "meta": {
+    "instanceId": "ac5b0d8804c1f923ecf9119739b1f167fd959dfb066fb99f38c7bb014f49e6e9"
+  },
+  "nodeGroups": [],
+  "id": "SHDoClNVDjqFQtC3",
+  "tags": []
+}

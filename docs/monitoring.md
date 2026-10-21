@@ -8,9 +8,10 @@ incoming webhook already used by the service (`ALERT_WEBHOOK_URL`).
 
 - Timezone: `America/Los_Angeles`. The business-window logic uses `$now`,
   which follows this setting.
-- Error Workflow: a one-node workflow named `Plexa Errors` with an HTTP Request
-  POST to the Slack webhook, body
-  `{"text": "n8n error in {{ $json.workflow.name }}: {{ $json.execution.error.message }}"}`.
+- Error Workflow: *Plexa — Slack Logger* (`RyanPlexa/n8n-logger/`), whose
+  Error Trigger turns an unhandled crash into a Red Slack message naming the
+  node. (Before 2026-10-20 this was a one-node `Plexa Errors` workflow posting
+  `n8n error in {{ $json.workflow.name }}: …` to the incoming webhook.)
 
 ## Workflow: Plexa Monitor
 

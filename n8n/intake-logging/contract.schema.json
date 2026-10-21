@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "plexa.n8n.log/v1",
+  "title": "Plexa n8n → Slack logger payload",
+  "description": "One item per log call. Sent by an Execute Workflow node to 'Plexa — Slack Logger'. Extra keys are ignored; a payload failing this schema still posts, as a Red 'malformed payload' notice.",
+  "type": "object",
+  "required": ["workflow_name", "execution_id", "stage", "status", "severity", "summary", "timestamp"],
+  "properties": {
+    "workflow_name": { "type": "string", "minLength": 1, "description": "{{ $workflow.name }}" },
+    "workflow_id":   { "type": "string", "description": "{{ $workflow.id }}; needed for the execution link" },
+    "execution_id":  { "type": "string", "minLength": 1, "description": "{{ $execution.id }}" },
+    "stage":         { "type": "string", "minLength": 1, "description": "which step ran: sweep | send | bounce | run | …" },
+    "status":        { "enum": ["success", "fail"] },
+    "severity":      { "enum": ["Green", "Yellow", "Red"], "description": "status=fail with Green is coerced to Yellow" },
+    "summary":       { "type": "string", "minLength": 1, "maxLength": 300, "description": "one human-readable line; longer is clipped" },
+    "details": {
+      "type": "object",
+      "description": "Flat key → scalar or short string, rendered as Slack fields (first 10). `breakdown` is rendered as its own 🟢/🟡/🔴 line.",
+      "properties": {
+        "breakdown": {
+          "type": "object",
+          "properties": {
+            "green":  { "type": "integer", "minimum": 0 },
+            "yellow": { "type": "integer", "minimum": 0 },
+            "red":    { "type": "integer", "minimum": 0 }
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "error": {
+      "type": "object",
+      "required": ["message"],
+      "properties": {
+        "message":     { "type": "string" },
+        "node":        { "type": "string" },
+        "stack":       { "type": "string", "description": "clipped to 1500 chars in Slack" },
+        "http_status": { "type": "integer" }
+      }
+    },
+    "timestamp":     { "type": "string", "format": "date-time", "description": "{{ $now.toISO() }}" },
+    "execution_url": { "type": "string", "format": "uri", "description": "optional; otherwise N8N_BASE_URL/workflow/<workflow_id>/executions/<execution_id>" }
+  },
+  "additionalProperties": true,
+  "examples": [
+    {
+      "workflow_name": "Plexa — Landlord Confirmation Send (Monday)",
+      "workflow_id": "AbC123",
+      "execution_id": "4471",
+      "stage": "run",
+      "status": "success",
+      "severity": "Yellow",
+      "summary": "Sent 30 of 32 confirmation emails; 2 bounced and were marked dead.",
+      "details": { "breakdown": { "green": 30, "yellow": 2, "red": 0 }, "landlords": 32, "properties": 121, "dry_run": false },
+      "timestamp": "2026-10-05T09:01:12.000-04:00"
+    },
+    {
+      "workflow_name": "Plexa — Landlord Confirmation Send (Monday)",
+      "workflow_id": "AbC123",
+      "execution_id": "4472",
+      "stage": "sweep",
+      "status": "fail",
+      "severity": "Red",
+      "summary": "Sweep call failed: 401 - {\"ok\":false,\"error\":\"unauthorized\"}",
+      "error": { "message": "401 - {\"ok\":false,\"error\":\"unauthorized\"}", "node": "Sweep", "http_status": 401 },
+      "details": { "endpoint": "/api/sweep", "retries": 2 },
+      "timestamp": "2026-10-12T09:00:07.000-04:00"
+    }
+  ]
+}
