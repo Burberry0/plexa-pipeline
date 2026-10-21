@@ -1,13 +1,18 @@
 # Airtable Schema
 
-Create one base with two tables. Field names must match exactly (the service
+Create one base with three tables. Field names must match exactly (the service
 writes by name). Single-select options must exist before the first write.
 
-**Every column below must exist before the matching build is deployed.** A
-missing column makes Airtable return 422 and sends every lead to `Manual
-Review`. Columns added for the property-matching hand-off (2026-10-13): Zip
-Code, Phone, Bathrooms, Adults, Children, Amenities, Special Requests, Match
-Ready on Leads; Match Ready on Messages.
+**Every Leads and Messages column below must exist before the matching build is
+deployed.** A missing column makes Airtable return 422 and sends every lead to
+`Manual Review`. Columns added for the property-matching hand-off (2026-10-13):
+Zip Code, Phone, Bathrooms, Adults, Children, Amenities, Special Requests,
+Match Ready on Leads; Match Ready on Messages.
+
+`Partners` is CRM / inventory-tier storage. It is not an ingest allowlist
+(unknown senders are still processed). Lookup is by Email (exact), with Domain
+as fallback. The pipeline does not require Partners columns to exist for
+`/ingest` to succeed until partner enrichment is wired.
 
 ## Table: Leads (one record per sender email)
 
@@ -60,6 +65,29 @@ The service upserts with `fieldsToMergeOn: ["Email"]`, so Email must stay the pr
 | Error | Long text | |
 | Tokens | Number (integer) | |
 | Processed At | Date (include time) | ISO 8601 UTC |
+
+## Table: Partners (one record per known partner contact)
+
+CRM source of truth for partner contacts who inquire about properties or
+receive inventory lists. Email must stay the primary field and unique.
+Normalize Email and Domain to lowercase on import.
+
+| Field | Type | Notes |
+|---|---|---|
+| Email | Single line text | **Primary field.** Lowercased partner contact email. Must be unique. Example: `alexandria.negrete@alesolutions.com` |
+| First Name | Single line text | May be blank. Example: `Alexandria` |
+| Last Name | Single line text | May be blank. Example: `Negrete` |
+| Inventory Tier | Single select | Options: `Full`, `Snap`. **Full** = full inventory (e.g. ALE, CRS). **Snap** = snapshot lists to stay engaged (e.g. iZeal Stay–style). Required when known. |
+| Vendor | Single select | Options: `ALE`, `Corpay`, `CRS`, `Sedgwick`, `Primus`, `Alacrity`, `TPS`, `Arrow ALE`, `Catale`, `Other`. Use `Other` when the domain does not map to a listed vendor. Corpay is related to ALE but kept separate so rows can sit next to ALE in views. |
+| Domain | Single line text | Email domain only, lowercased, no `@`. Example: `alesolutions.com`. Domain-level fallback when exact Email is missing. |
+| Company Name | Single line text | Optional free-text company beyond Vendor. Examples: `ALE Solutions`, `Key Luxe Suites` |
+| Status | Single select | Options: `Active`, `Inactive`, `Do Not Contact`. Default new imports to `Active`. |
+| Notes | Long text | Optional freeform notes (address aliases, import flags, bad emails, etc.). |
+| Source | Single select | Options: `Full CSV`, `Snap CSV`, `All Stakeholders`, `Manual` |
+| Last Verified | Date | Optional. Date the contact was last confirmed good; leave blank on first import. Format `YYYY-MM-DD`. |
+
+Suggested views: **All Partners** (sort Vendor, Email); **Full Inventory** /
+**Snap Inventory** (filter on Inventory Tier); **By Vendor** (group by Vendor).
 
 ## Personal access token
 
