@@ -15,7 +15,7 @@ From `POST /ingest` (the full `PipelineResult.to_dict()`):
 | `reply.should_send`, `reply.html`, `reply.subject`, `reply.skip_reason` | nodes 5, 5a, 6a |
 | `match.ready` (bool) | node 6d; true only when zip, bedrooms and move-in are all known |
 | `match.missing_fields` (list) | nodes 3b and 5a log text |
-| `match.request` (object or null) | node 6e body: a JotForm-shaped submission for the matching workflow's Webhook node |
+| `match.request` (object or null) | node 6e body: readable match fields (`zip_code`, `bedrooms`, `email`, …) for the matching workflow's Webhook node |
 | `extraction.*` | node 3b log text (now includes `zip_code`, `bathrooms`, `amenities`, `phone`, `requester_type`) |
 
 `match` is present on every response (JUNK, duplicate and error responses carry
@@ -139,18 +139,18 @@ match request; a human handles it from `Needs Review`.
   Python env var and must not be added to the service.
 - Send Body: JSON, Body: `{{ JSON.stringify($('POST /ingest').item.json.match.request) }}`
 - Options: Timeout 30000 ms; Retry on fail ON, 1 retry, 5000 ms wait.
-- The body is the same shape as a JotForm submission (`q2_q2_fullname0`,
-  `q18_whatEmail`, `q72_desiredZip`, `q13_q13_datetime11`, …) plus `source:
-  "email"`, `message_id`, `thread_id` for tracing. The matching workflow's
-  existing formatting, geocoding, Request_ID and Priority nodes run unchanged.
-  Verify once against a real submission in that workflow's execution log that
-  it reads `$json.body` (not `$json.body.rawRequest`) and that
-  `q11_q11_checkbox9` arrives as an array.
+- The body uses readable keys (`first_name`, `last_name`, `email`, `zip_code`,
+  `bedrooms`, `move_in_date` as `YYYY-MM-DD`, `pets`, `amenities`, …) plus
+  `source: "email"`, `message_id`, `thread_id` for tracing — see
+  `match_request.py`. The matching workflow's form-parse node must accept this
+  shape (not only legacy JotForm `q*` keys). Verify once that it reads
+  `$json.body` (or parses a stringified body) and that `amenities` arrives as
+  an array.
 - Output → node 6f.
 
 ## 6f. HTTP Request — "Slack match log"
 - POST to the Slack webhook:
-  `{{ JSON.stringify({ text: ':house: Match request sent to property matching for ' + $('Build payload').item.json.sender_email + ' (' + $('POST /ingest').item.json.tier + ', zip ' + $('POST /ingest').item.json.match.request.q72_desiredZip + ')' }) }}`
+  `{{ JSON.stringify({ text: ':house: Match request sent to property matching for ' + $('Build payload').item.json.sender_email + ' (' + $('POST /ingest').item.json.tier + ', zip ' + $('POST /ingest').item.json.match.request.zip_code + ')' }) }}`
 - Output → node 6b.
 
 ## 6c. (declined) HTTP Request — "Slack declined"

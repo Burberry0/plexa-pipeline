@@ -244,8 +244,8 @@ def run_demo(output_json: bool = False):
             # Property-matching hand-off
             if result.match_ready:
                 mr = result.match_request
-                print(f"\n  🏠 Match request ready → zip {mr['q72_desiredZip']}, {mr['q6_q6_number4']}BR, "
-                      f"move-in {mr['q13_q13_datetime11']['month']}/{mr['q13_q13_datetime11']['day']}/{mr['q13_q13_datetime11']['year']}")
+                print(f"\n  🏠 Match request ready → zip {mr['zip_code']}, {mr['bedrooms']}BR, "
+                      f"move-in {mr['move_in_date']}")
             elif result.extracted:
                 print(f"\n  ⏸️  Not match-ready — missing: {', '.join(result.match_missing_fields)}")
 

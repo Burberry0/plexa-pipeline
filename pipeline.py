@@ -44,7 +44,7 @@ class Pipeline:
       2. Junk filter (cheap chat model)
       3. Extraction (strict JSON schema), merged over the sender's prior record if any
       4. Tier classification + upgrade detection; a match-ready lead (all gate
-         fields) also gets a JotForm-shaped `match_request` for n8n to POST to
+         fields) also gets a readable `match_request` for n8n to POST to
          the property-matching workflow once a human approves in Slack
       5. Reply decision (guardrails) + reply rendering
       6. Airtable upsert (all tiers) + message log

@@ -958,7 +958,7 @@
           </div>
 
           ${data.match ? (data.match.ready
-            ? `<div style="margin-top:10px;padding:8px 10px;border:1px solid var(--border);border-radius:3px;font-size:11px;">🏠 <strong>Match-ready.</strong> Approving in Slack POSTs this request to property matching.<details style="margin-top:6px;"><summary style="cursor:pointer;color:var(--muted)">match.request (JotForm body)</summary><pre style="margin:6px 0 0;white-space:pre-wrap;font-size:10px;">${esc(JSON.stringify(data.match.request, null, 2))}</pre></details></div>`
+            ? `<div style="margin-top:10px;padding:8px 10px;border:1px solid var(--border);border-radius:3px;font-size:11px;">🏠 <strong>Match-ready.</strong> Approving in Slack POSTs this request to property matching.<details style="margin-top:6px;"><summary style="cursor:pointer;color:var(--muted)">match.request</summary><pre style="margin:6px 0 0;white-space:pre-wrap;font-size:10px;">${esc(JSON.stringify(data.match.request, null, 2))}</pre></details></div>`
             : `<div style="margin-top:10px;padding:8px 10px;border:1px solid var(--border);border-radius:3px;font-size:11px;color:var(--muted)">⏸ Not match-ready — missing: ${esc((data.match.missing_fields || []).join(', ') || 'n/a')}</div>`) : ''}
 
           ${lead?.notes ? `<div style="margin-top:10px;padding:8px 10px;border:1px solid var(--border);border-radius:3px;font-size:11px;color:var(--muted)">📝 ${esc(lead.notes)}</div>` : ''}

@@ -206,8 +206,8 @@ def test_to_dict_shape(base_config, make_email):
 
 def test_match_request_present_when_match_ready(base_config, make_email):
     r = _pipeline(base_config).process_email(make_email(), persist=False)
-    assert r.match_request["q72_desiredZip"] == "89052"
-    assert r.match_request["q6_q6_number4"] == "2"
+    assert r.match_request["zip_code"] == "89052"
+    assert r.match_request["bedrooms"] == "2"
     d = r.to_dict()
     assert d["match"]["ready"] is True
     assert d["match"]["missing_fields"] == []
@@ -233,7 +233,7 @@ def test_junk_and_duplicate_report_not_match_ready(base_config, make_email):
 
 def test_asap_match_request_uses_pipeline_now(base_config, make_email):
     r = _pipeline(base_config).process_email(make_email(), persist=False)  # FakeAI default is ASAP
-    assert r.match_request["q13_q13_datetime11"] == {"month": "10", "day": "05", "year": "2026"}
+    assert r.match_request["move_in_date"] == "2026-10-05"
 
 
 def test_match_ready_logged_on_messages_and_leads(base_config, make_email):
@@ -278,8 +278,8 @@ def test_legacy_tier1_row_upgrades_when_zip_and_date_arrive(base_config, make_em
     assert r.is_upgrade is True
     assert r.tier == Tier.TIER_1  # merged budget is the bonus
     assert "exactly what we needed" in r.reply_html
-    assert r.match_request["q72_desiredZip"] == "89052"
-    assert r.match_request["q6_q6_number4"] == "2"
+    assert r.match_request["zip_code"] == "89052"
+    assert r.match_request["bedrooms"] == "2"
     assert at.leads["sarah@example.com"][1]["Match Ready"] is True
 
 

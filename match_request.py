@@ -1,28 +1,34 @@
 """
 Plexa Housing — Property-matching request builder
 
-Turns a match-ready ExtractedLead into the body the Property Matching n8n
-workflow already accepts: a JotForm submission. The matching workflow owns
-formatting, zip → lat/long geocoding, Request_ID and Priority, so this module
-only fills the form fields. Pure functions, no I/O, no config.
+Turns a match-ready ExtractedLead into the body n8n POSTs to the Property
+Matching webhook after Slack approval. Field names are plain English (same
+concepts as ExtractedLead / Airtable), not JotForm q* keys. The matching
+workflow owns geocoding, Request_ID and Priority. Pure functions, no I/O.
 
-JotForm keys (form 260054674457057), values are strings and blanks are "":
-  q2_q2_fullname0   {first, last}            q67_areYou        Individual | Company
-  q68_typeA68       company holds lease?     q69_areYou69      connecting client directly?
-  q71_company       company name             q18_whatEmail     email
-  q4_q4_phone2      {full}                   q29_occupants     adults
-  q33_number        children                 q72_desiredZip    5-digit zip
-  q14_q14_dropdown12  "1 Month".."5 Months" | "6+ Months"
-  q13_q13_datetime11  {month, day, year}     q6_q6_number4     min bedrooms
-  q7_q7_number5     min bathrooms            q8_q8_number6     min sq ft
-  q20_garageRequired  Yes | No               q21_garageSpots   1 | 2 | 3 | 3+
-  q22_pets          Yes | No                 q35_petQuantity   "1".."10"
-  q23_petType       Dog | Cat | Other        q28_dogWeight28   pet 1 weight/breed text
-  q11_q11_checkbox9 amenity labels (list)    q12_q12_textarea10  special requests
-
-TODO(jotform): pets 2-10 have their own repeating keys (q25_typeA, q63_petType63 /
-q64_dogWeight / q65_petWeight, ...). Until they are confirmed from a real submission,
-additional pets are appended to q12 so nothing is lost. q68/q69 are left blank.
+Keys (scalars are strings; blanks are ""; amenities is a list):
+  first_name, last_name       from sender display name
+  email                       sender address (lowercased)
+  phone                       formatted US number or as written
+  requester_type              Individual | Company | ""
+  company_holds_lease         reserved ("" for now)
+  connecting_client_directly  reserved ("" for now)
+  company_name
+  adults, children
+  zip_code                    5-digit gate field
+  lease_length                "1 Month".."5 Months" | "6+ Months" | ""
+  move_in_date                YYYY-MM-DD ("ASAP" resolves to today)
+  bedrooms, bathrooms, square_feet
+  garage_required             Yes | No | ""
+  garage_spaces               1 | 2 | 3 | 3+ | ""
+  pets                        Yes | No | ""
+  pet_quantity                "1".."10" | ""
+  pet_type                    Dog | Cat | Other | ""
+  pet_description             weight/breed text for first pet
+  special_requests            free text (extra pets appended here)
+  amenities                   list of JotForm amenity labels
+  source                      "email"
+  message_id, thread_id       Gmail traceability
 """
 
 import re
@@ -37,7 +43,7 @@ MAX_GARAGE_SPOTS = 3
 
 
 def _s(value) -> str:
-    """JotForm sends every scalar as a string; None becomes ''."""
+    """Scalar to string; None becomes ''."""
     if value is None:
         return ""
     if isinstance(value, float) and value.is_integer():
@@ -66,15 +72,16 @@ def lease_bucket(months: Optional[int]) -> str:
     return "1 Month" if months == 1 else f"{months} Months"
 
 
-def _move_in(value: Optional[str], today: date) -> dict:
+def _move_in_iso(value: Optional[str], today: date) -> str:
+    """YYYY-MM-DD; ASAP → today; unparseable → ''."""
     if value == "ASAP":
         d = today
     else:
         try:
             d = date.fromisoformat((value or "").strip())
         except ValueError:
-            return {"month": "", "day": "", "year": ""}
-    return {"month": f"{d.month:02d}", "day": f"{d.day:02d}", "year": f"{d.year:04d}"}
+            return ""
+    return f"{d.year:04d}-{d.month:02d}-{d.day:02d}"
 
 
 def _pet_type_from_text(text: str) -> str:
@@ -104,29 +111,38 @@ def _pets(lead: ExtractedLead) -> dict:
     has_pets = (count or 0) > 0 or bool(lead.pets)
     if not has_pets:
         status = "No" if (lead.pets == [] or count == 0) else ""
-        return {"q22_pets": status, "q35_petQuantity": "", "q23_petType": "", "q28_dogWeight28": "", "extra": []}
+        return {
+            "pets": status,
+            "pet_quantity": "",
+            "pet_type": "",
+            "pet_description": "",
+            "extra": [],
+        }
 
     details = lead.pet_details or []
     if details:
         first = details[0]
         pet_type = first.get("type") if first.get("type") in PET_TYPES else "Other"
         description = first.get("description") or ""
-        extra = [f"{d.get('type') or 'Other'}{': ' + d['description'] if d.get('description') else ''}" for d in details[1:]]
+        extra = [
+            f"{d.get('type') or 'Other'}{': ' + d['description'] if d.get('description') else ''}"
+            for d in details[1:]
+        ]
     else:
         pet_type = _pet_type_from_text(lead.pets[0]) if lead.pets else "Other"
         description = ", ".join(lead.pets or [])
         extra = []
     return {
-        "q22_pets": "Yes",
-        "q35_petQuantity": _s(min(count or len(lead.pets or []) or 1, MAX_PETS)),
-        "q23_petType": pet_type,
-        "q28_dogWeight28": description,
+        "pets": "Yes",
+        "pet_quantity": _s(min(count or len(lead.pets or []) or 1, MAX_PETS)),
+        "pet_type": pet_type,
+        "pet_description": description,
         "extra": extra,
     }
 
 
 def build_match_request(lead: ExtractedLead, email: InboundEmail, today: date) -> dict:
-    """JotForm-shaped body for the Property Matching webhook. Call only when lead.has_gate_fields."""
+    """Readable match body for the Property Matching webhook. Call only when lead.has_gate_fields."""
     first, last = split_name(email.sender_name)
     pets = _pets(lead)
 
@@ -147,30 +163,30 @@ def build_match_request(lead: ExtractedLead, email: InboundEmail, today: date) -
         spots = f"{MAX_GARAGE_SPOTS}+" if lead.garage_spaces > MAX_GARAGE_SPOTS else _s(lead.garage_spaces)
 
     return {
-        "q2_q2_fullname0": {"first": first, "last": last},
-        "q67_areYou": requester,
-        "q68_typeA68": "",
-        "q69_areYou69": "",
-        "q71_company": _s(lead.company_name),
-        "q18_whatEmail": email.sender_email.lower(),
-        "q4_q4_phone2": {"full": format_phone(lead.phone)},
-        "q29_occupants": _s(adults),
-        "q33_number": _s(lead.children),
-        "q72_desiredZip": _s(lead.zip_code),
-        "q14_q14_dropdown12": lease_bucket(lead.duration_months),
-        "q13_q13_datetime11": _move_in(lead.move_in_date, today),
-        "q6_q6_number4": _s(lead.bedrooms),
-        "q7_q7_number5": _s(lead.bathrooms),
-        "q8_q8_number6": _s(lead.square_feet),
-        "q20_garageRequired": garage,
-        "q21_garageSpots": spots,
-        "q22_pets": pets["q22_pets"],
-        "q35_petQuantity": pets["q35_petQuantity"],
-        "q23_petType": pets["q23_petType"],
-        "q28_dogWeight28": pets["q28_dogWeight28"],
-        "q12_q12_textarea10": "\n".join(special),
-        "q11_q11_checkbox9": list(lead.amenities or []),
-        # Traceability for the matching workflow's logs; unknown keys are ignored by the form mapping.
+        "first_name": first,
+        "last_name": last,
+        "email": email.sender_email.lower(),
+        "phone": format_phone(lead.phone),
+        "requester_type": requester,
+        "company_holds_lease": "",
+        "connecting_client_directly": "",
+        "company_name": _s(lead.company_name),
+        "adults": _s(adults),
+        "children": _s(lead.children),
+        "zip_code": _s(lead.zip_code),
+        "lease_length": lease_bucket(lead.duration_months),
+        "move_in_date": _move_in_iso(lead.move_in_date, today),
+        "bedrooms": _s(lead.bedrooms),
+        "bathrooms": _s(lead.bathrooms),
+        "square_feet": _s(lead.square_feet),
+        "garage_required": garage,
+        "garage_spaces": spots,
+        "pets": pets["pets"],
+        "pet_quantity": pets["pet_quantity"],
+        "pet_type": pets["pet_type"],
+        "pet_description": pets["pet_description"],
+        "special_requests": "\n".join(special),
+        "amenities": list(lead.amenities or []),
         "source": "email",
         "message_id": email.message_id or "",
         "thread_id": email.thread_id or "",

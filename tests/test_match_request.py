@@ -18,29 +18,30 @@ def test_full_lead_maps_every_key(make_email):
     email = make_email(sender_name="Rebeca Villarroel", sender_email="Rebeca@PlexaHousing.com", message_id="m-1", thread_id="t-1")
     body = build_match_request(lead, email, today=TODAY)
     assert body == {
-        "q2_q2_fullname0": {"first": "Rebeca", "last": "Villarroel"},
-        "q67_areYou": "Company",
-        "q68_typeA68": "",
-        "q69_areYou69": "",
-        "q71_company": "Acme Relocation",
-        "q18_whatEmail": "rebeca@plexahousing.com",
-        "q4_q4_phone2": {"full": "(702) 555-1234"},
-        "q29_occupants": "2",
-        "q33_number": "1",
-        "q72_desiredZip": "89147",
-        "q14_q14_dropdown12": "6+ Months",
-        "q13_q13_datetime11": {"month": "10", "day": "20", "year": "2026"},
-        "q6_q6_number4": "3",
-        "q7_q7_number5": "2",
-        "q8_q8_number6": "1500",
-        "q20_garageRequired": "Yes",
-        "q21_garageSpots": "2",
-        "q22_pets": "Yes",
-        "q35_petQuantity": "1",
-        "q23_petType": "Dog",
-        "q28_dogWeight28": "40 lbs Husky",
-        "q12_q12_textarea10": "Section 8 voucher",
-        "q11_q11_checkbox9": ["Pool", "Yard"],
+        "first_name": "Rebeca",
+        "last_name": "Villarroel",
+        "email": "rebeca@plexahousing.com",
+        "phone": "(702) 555-1234",
+        "requester_type": "Company",
+        "company_holds_lease": "",
+        "connecting_client_directly": "",
+        "company_name": "Acme Relocation",
+        "adults": "2",
+        "children": "1",
+        "zip_code": "89147",
+        "lease_length": "6+ Months",
+        "move_in_date": "2026-10-20",
+        "bedrooms": "3",
+        "bathrooms": "2",
+        "square_feet": "1500",
+        "garage_required": "Yes",
+        "garage_spaces": "2",
+        "pets": "Yes",
+        "pet_quantity": "1",
+        "pet_type": "Dog",
+        "pet_description": "40 lbs Husky",
+        "special_requests": "Section 8 voucher",
+        "amenities": ["Pool", "Yard"],
         "source": "email",
         "message_id": "m-1",
         "thread_id": "t-1",
@@ -49,27 +50,28 @@ def test_full_lead_maps_every_key(make_email):
 
 def test_minimal_match_ready_lead_blanks_everything_else(make_email):
     body = build_match_request(ExtractedLead(zip_code="89052", bedrooms=2, move_in_date="ASAP"), make_email(), today=TODAY)
-    assert body["q72_desiredZip"] == "89052"
-    assert body["q6_q6_number4"] == "2"
-    assert body["q13_q13_datetime11"] == {"month": "10", "day": "13", "year": "2026"}
-    assert body["q2_q2_fullname0"] == {"first": "Sarah", "last": "Johnson"}
-    assert body["q18_whatEmail"] == "sarah@example.com"
-    assert body["q11_q11_checkbox9"] == []
-    for key in ("q67_areYou", "q71_company", "q29_occupants", "q33_number", "q14_q14_dropdown12",
-                "q7_q7_number5", "q8_q8_number6", "q20_garageRequired", "q21_garageSpots",
-                "q22_pets", "q35_petQuantity", "q23_petType", "q28_dogWeight28", "q12_q12_textarea10"):
+    assert body["zip_code"] == "89052"
+    assert body["bedrooms"] == "2"
+    assert body["move_in_date"] == "2026-10-13"
+    assert body["first_name"] == "Sarah" and body["last_name"] == "Johnson"
+    assert body["email"] == "sarah@example.com"
+    assert body["amenities"] == []
+    for key in (
+        "requester_type", "company_name", "adults", "children", "lease_length",
+        "bathrooms", "square_feet", "garage_required", "garage_spaces",
+        "pets", "pet_quantity", "pet_type", "pet_description", "special_requests", "phone",
+    ):
         assert body[key] == "", key
-    assert body["q4_q4_phone2"] == {"full": ""}
 
 
 def test_bad_date_is_blank(make_email):
     body = build_match_request(ExtractedLead(zip_code="89052", bedrooms=2, move_in_date="sometime"), make_email(), today=TODAY)
-    assert body["q13_q13_datetime11"] == {"month": "", "day": "", "year": ""}
+    assert body["move_in_date"] == ""
 
 
 def test_zero_padded_date(make_email):
     body = build_match_request(ExtractedLead(zip_code="89052", bedrooms=2, move_in_date="2027-06-05"), make_email(), today=TODAY)
-    assert body["q13_q13_datetime11"] == {"month": "06", "day": "05", "year": "2027"}
+    assert body["move_in_date"] == "2027-06-05"
 
 
 def test_phone_formats():
@@ -93,25 +95,27 @@ def test_lease_buckets():
 
 def test_garage_spots_capped(make_email):
     def spots(n):
-        return build_match_request(ExtractedLead(**GATES, garage_required=True, garage_spaces=n), make_email(), today=TODAY)["q21_garageSpots"]
+        return build_match_request(
+            ExtractedLead(**GATES, garage_required=True, garage_spaces=n), make_email(), today=TODAY
+        )["garage_spaces"]
     assert spots(1) == "1" and spots(3) == "3" and spots(4) == "3+" and spots(None) == ""
     no = build_match_request(ExtractedLead(**GATES, garage_required=False), make_email(), today=TODAY)
-    assert no["q20_garageRequired"] == "No"
+    assert no["garage_required"] == "No"
 
 
 def test_pets_fallback_from_legacy_strings(make_email):
     body = build_match_request(ExtractedLead(**GATES, pets=["2 cats"]), make_email(), today=TODAY)
-    assert body["q22_pets"] == "Yes"
-    assert body["q35_petQuantity"] == "2"
-    assert body["q23_petType"] == "Cat"
-    assert body["q28_dogWeight28"] == "2 cats"
+    assert body["pets"] == "Yes"
+    assert body["pet_quantity"] == "2"
+    assert body["pet_type"] == "Cat"
+    assert body["pet_description"] == "2 cats"
 
 
 def test_no_pets_and_unknown_pets(make_email):
     no = build_match_request(ExtractedLead(**GATES, pets=[]), make_email(), today=TODAY)
-    assert no["q22_pets"] == "No" and no["q35_petQuantity"] == "" and no["q23_petType"] == ""
+    assert no["pets"] == "No" and no["pet_quantity"] == "" and no["pet_type"] == ""
     unknown = build_match_request(ExtractedLead(**GATES), make_email(), today=TODAY)
-    assert unknown["q22_pets"] == ""
+    assert unknown["pets"] == ""
 
 
 def test_extra_pets_go_to_special_requests(make_email):
@@ -121,39 +125,39 @@ def test_extra_pets_go_to_special_requests(make_email):
         special_requests="Ground floor please",
     )
     body = build_match_request(lead, make_email(), today=TODAY)
-    assert body["q35_petQuantity"] == "2"
-    assert body["q23_petType"] == "Dog"
-    assert body["q12_q12_textarea10"] == "Ground floor please\nAdditional pets: Cat"
+    assert body["pet_quantity"] == "2"
+    assert body["pet_type"] == "Dog"
+    assert body["special_requests"] == "Ground floor please\nAdditional pets: Cat"
 
 
 def test_pet_quantity_capped_at_ten(make_email):
     body = build_match_request(ExtractedLead(**GATES, pet_count=12, pets=["12 cats"]), make_email(), today=TODAY)
-    assert body["q35_petQuantity"] == "10"
+    assert body["pet_quantity"] == "10"
 
 
 def test_occupants_fallback_to_adults_field(make_email):
     body = build_match_request(ExtractedLead(**GATES, occupants=4), make_email(), today=TODAY)
-    assert body["q29_occupants"] == "4" and body["q33_number"] == ""
+    assert body["adults"] == "4" and body["children"] == ""
     body = build_match_request(ExtractedLead(**GATES, occupants=4, adults=2, children=2), make_email(), today=TODAY)
-    assert body["q29_occupants"] == "2" and body["q33_number"] == "2"
+    assert body["adults"] == "2" and body["children"] == "2"
 
 
 def test_requester_type_defaults(make_email):
-    assert build_match_request(ExtractedLead(**GATES, company_name="Acme"), make_email(), today=TODAY)["q67_areYou"] == "Company"
-    assert build_match_request(ExtractedLead(**GATES, requester_type="Individual"), make_email(), today=TODAY)["q67_areYou"] == "Individual"
-    assert build_match_request(ExtractedLead(**GATES), make_email(), today=TODAY)["q67_areYou"] == ""
+    assert build_match_request(ExtractedLead(**GATES, company_name="Acme"), make_email(), today=TODAY)["requester_type"] == "Company"
+    assert build_match_request(ExtractedLead(**GATES, requester_type="Individual"), make_email(), today=TODAY)["requester_type"] == "Individual"
+    assert build_match_request(ExtractedLead(**GATES), make_email(), today=TODAY)["requester_type"] == ""
 
 
 def test_name_from_last_first_and_empty_sender(make_email):
     body = build_match_request(ExtractedLead(**GATES), make_email(sender_name="Johnson, Sarah"), today=TODAY)
-    assert body["q2_q2_fullname0"] == {"first": "Sarah", "last": "Johnson"}
+    assert body["first_name"] == "Sarah" and body["last_name"] == "Johnson"
     body = build_match_request(ExtractedLead(**GATES), make_email(sender_name=""), today=TODAY)
-    assert body["q2_q2_fullname0"] == {"first": "", "last": ""}
+    assert body["first_name"] == "" and body["last_name"] == ""
 
 
 def test_pet_weight_is_not_read_as_a_count(make_email):
     body = build_match_request(ExtractedLead(**GATES, pets=["40 lb lab"]), make_email(), today=TODAY)
-    assert body["q22_pets"] == "Yes"
-    assert body["q35_petQuantity"] == "1"
-    assert body["q23_petType"] == "Other"
-    assert body["q28_dogWeight28"] == "40 lb lab"
+    assert body["pets"] == "Yes"
+    assert body["pet_quantity"] == "1"
+    assert body["pet_type"] == "Other"
+    assert body["pet_description"] == "40 lb lab"

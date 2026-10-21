@@ -47,7 +47,7 @@ curl -X POST https://<your-vercel-domain>/ingest \
   -d '{"sender_email":"runbook@test.com","sender_name":"Run Book","subject":"2BR Henderson","body_plain":"Need a 2 bedroom in Henderson 89052, moving in ASAP, $1800 budget","message_id":"runbook-1"}'
 ```
 
-Expected: `tier: "Tier 1"`, `match.ready: true` with `match.request.q72_desiredZip: "89052"`, `reply.should_send: false`, `reply.skip_reason: "auto_reply_disabled"`, and a new row in both Airtable tables with `Match Ready` ticked. Delete the test rows afterwards.
+Expected: `tier: "Tier 1"`, `match.ready: true` with `match.request.zip_code: "89052"`, `reply.should_send: false`, `reply.skip_reason: "auto_reply_disabled"`, and a new row in both Airtable tables with `Match Ready` ticked. Delete the test rows afterwards.
 
 ## Shadow run (1–2 weeks)
 

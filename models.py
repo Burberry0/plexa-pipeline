@@ -78,7 +78,7 @@ class ExtractedLead:
     occupants: Optional[int] = None
     duration_months: Optional[int] = None
     pet_friendly_required: Optional[bool] = None
-    # Property-matching inputs (JotForm contract, see match_request.py)
+    # Property-matching inputs (see match_request.py)
     zip_code: Optional[str] = None
     phone: Optional[str] = None
     bathrooms: Optional[float] = None
@@ -142,7 +142,7 @@ class PipelineResult:
     reply_html: Optional[str] = None
     should_reply: bool = False
     reply_skip_reason: Optional[str] = None
-    match_request: Optional[dict] = None  # JotForm-shaped body; set only when match-ready
+    match_request: Optional[dict] = None  # Readable match body; set only when match-ready
     error: Optional[str] = None
     processing_time_ms: float = 0.0
 

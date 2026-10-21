@@ -16,8 +16,8 @@ InboundEmail (from n8n webhook)
  ├─ 3. AI extraction [glm-5.3-flash, strict JSON schema] → ExtractedLead (26 fields)
  │    └─ Merged over the sender's prior Leads record if one exists
  ├─ 4. Tier classification [validation.py] → Tier 1 / 2 / 3, upgrade detection
- │    └─ Match-ready (Tier 1/2) → match.request [match_request.py], a JotForm-shaped
- │       body for the Property Matching workflow
+ │    └─ Match-ready (Tier 1/2) → match.request [match_request.py], readable
+ │       fields for the Property Matching workflow
  ├─ 5. Reply decision [guardrails.py] + rendered reply [email_templates.py]
  └─ 6. Airtable upsert (all tiers) + Messages log
        n8n sends the reply when reply.should_send is true and, after the same
@@ -78,7 +78,7 @@ See also: [`docs/n8n-workflow.md`](docs/n8n-workflow.md), [`docs/airtable-schema
 | `airtable_client.py` | Airtable REST client. Leads upsert, Messages log, field mapping. |
 | `guardrails.py` | Reply decision: kill switch, max replies, cooldown. Pure. |
 | `alerts.py` | Slack-compatible webhook alert on pipeline errors. |
-| `match_request.py` | Pure builder: ExtractedLead → JotForm-shaped body for the Property Matching workflow. |
+| `match_request.py` | Pure builder: ExtractedLead → readable match body for the Property Matching workflow. |
 | `evals/` | Golden email set and eval runner. |
 
 ## Tier Classification
