@@ -118,12 +118,13 @@ def test_coerce_drops_extra_fields():
 
 
 def test_prompt_versions_bumped():
-    assert PROMPTS["extraction"]["version"] == "2.1.0"
-    assert PROMPTS["extraction"]["last_updated"] == "2026-10-19"
+    assert PROMPTS["extraction"]["version"] == "2.2.0"
+    assert PROMPTS["extraction"]["last_updated"] == "2026-10-27"
     assert PROMPTS["junk_filter"]["version"] == "1.1.0"
     assert "2026-06-15" not in PROMPTS["extraction"]["system_prompt"]
     assert "zip_code" in PROMPTS["extraction"]["system_prompt"]
     assert "pet_friendly_required: true" in PROMPTS["extraction"]["system_prompt"]
+    assert "do not invent a ±10% band" in PROMPTS["extraction"]["system_prompt"]
 
 
 def test_coerce_sets_pet_friendly_required_when_pets_present():

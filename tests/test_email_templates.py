@@ -8,15 +8,14 @@ def test_brand_header_omits_property_management_tagline(make_email):
     assert "Las Vegas Property Management" not in html
 
 
-def test_format_budget_mirrors_stated_amount():
-    # Single stated figure that extraction expanded ±10%
-    assert _format_budget(1620, 1980) == "$1,800/mo"
-    assert _format_budget(1350, 1650) == "$1,500/mo"
-    # Exact single amount / one-sided
+def test_format_budget_is_the_number_they_are_looking_for():
+    # Single stated figure (current extraction: min == max)
     assert _format_budget(1800, 1800) == "$1,800/mo"
     assert _format_budget(None, 2000) == "$2,000/mo"
     assert _format_budget(1200, None) == "$1,200/mo"
-    # Real stated range stays a range
+    # Legacy ±10% bands still collapse to the stated figure
+    assert _format_budget(1620, 1980) == "$1,800/mo"
+    # Only a true two-bound range stays a range
     assert _format_budget(1200, 1500) == "$1,200 – $1,500/mo"
     assert _format_budget(None, None) is None
 
@@ -24,11 +23,11 @@ def test_format_budget_mirrors_stated_amount():
 def test_recap_budget_uses_stated_amount(make_email):
     lead = ExtractedLead(
         zip_code="89052", bedrooms=2, move_in_date="ASAP",
-        budget_min=1620, budget_max=1980,
+        budget_min=1800, budget_max=1800,
     )
     _, html = render_reply(Tier.TIER_1, False, make_email(), lead)
     assert "$1,800/mo" in html
-    assert "$1,620" not in html
+    assert "$1,800 – $" not in html
     assert "Up to $" not in html
 
 

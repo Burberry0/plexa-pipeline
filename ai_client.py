@@ -132,10 +132,11 @@ Zip code:
   Not mentioned → null
 
 Budget:
-  "around $1500" → min: 1350, max: 1650 (±10%)
-  "up to $2000" → min: null, max: 2000
-  "$1200-$1500" → min: 1200, max: 1500
-  "$1500/month" → min: 1500, max: 1500
+  Store the figure(s) the requester stated — do not invent a ±10% band.
+  "around $1500", "about $1500", "~$1500", "$1500/month" → min: 1500, max: 1500
+  "up to $2000", "max $2000" → min: null, max: 2000
+  "at least $1200", "from $1200" → min: 1200, max: null
+  "$1200-$1500", "$1200 to $1500" → min: 1200, max: 1500
   Not mentioned → null for both
 
 Move-in Date:
@@ -262,8 +263,8 @@ PROMPTS = {
         "user_template": JUNK_FILTER_USER_TEMPLATE,
     },
     "extraction": {
-        "version": "2.1.0",
-        "last_updated": "2026-10-19",
+        "version": "2.2.0",
+        "last_updated": "2026-10-27",
         "system_prompt": EXTRACTION_SYSTEM_PROMPT,
         "user_template": EXTRACTION_USER_TEMPLATE,
         "json_schema": EXTRACTION_JSON_SCHEMA,

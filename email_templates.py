@@ -85,11 +85,11 @@ def _recap_table(lead: ExtractedLead) -> str:
 
 
 def _format_budget(min_val, max_val):
-    """Format budget for the prospect-facing recap.
+    """Show the budget number(s) the requester stated — one figure when possible.
 
-    Show the figure(s) as stated — no "Up to"/"From" paraphrase. When extraction
-    expanded a single stated amount to ±10% (e.g. ~$1800 → 1620–1980), collapse
-    back to the midpoint so the email mirrors what the requester wrote.
+    Prefer a single monthly amount (what they're looking for). Only show a range
+    when they wrote two different bounds. Legacy ±10% extraction bands
+    (e.g. ~$1800 → 1620–1980) collapse to the midpoint.
     """
     if min_val is None and max_val is None:
         return None
@@ -97,6 +97,7 @@ def _format_budget(min_val, max_val):
         if min_val == max_val:
             return f"${min_val:,.0f}/mo"
         mid = (min_val + max_val) / 2.0
+        # Old extractions expanded a single figure to ±10%; show that figure.
         if mid > 0 and abs(min_val - mid * 0.9) < 0.51 and abs(max_val - mid * 1.1) < 0.51:
             return f"${mid:,.0f}/mo"
         return f"${min_val:,.0f} – ${max_val:,.0f}/mo"
