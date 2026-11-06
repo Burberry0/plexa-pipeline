@@ -8,6 +8,45 @@ def test_brand_header_omits_property_management_tagline(make_email):
     assert "Las Vegas Property Management" not in html
 
 
+def test_uses_brand_palette_and_hosted_logo(make_email):
+    for tier, upgrade in [(Tier.TIER_1, False), (Tier.TIER_2, False), (Tier.TIER_3, False), (Tier.TIER_1, True)]:
+        _, html = render_reply(tier, upgrade, make_email(), ExtractedLead(location="Henderson", bedrooms=2))
+        assert "#27A3A5" in html
+        assert 'src="https://availablity-check.vercel.app/api/logo.png"' in html
+        assert 'alt="Plexa Housing"' in html
+        for off_brand in ("#1a365d", "#f59e0b", "#fffbeb", "#92400e", "#123a5e", "#1b5183"):
+            assert off_brand not in html.lower()
+
+
+def test_every_reply_has_inbox_preview_text(make_email):
+    for tier, upgrade in [(Tier.TIER_1, False), (Tier.TIER_2, False), (Tier.TIER_3, False), (Tier.TIER_1, True)]:
+        _, html = render_reply(tier, upgrade, make_email(), ExtractedLead(location="Henderson", bedrooms=2))
+        assert "display:none" in html.split("<table", 1)[0]
+
+
+def test_recap_values_read_naturally(make_email):
+    lead = ExtractedLead(zip_code="89052", bedrooms=2, move_in_date="2026-06-15", bathrooms=2.0,
+                         duration_months=1, pets=["small dog"])
+    _, html = render_reply(Tier.TIER_1, False, make_email(), lead)
+    assert "June 15, 2026" in html and "2026-06-15" not in html
+    assert ">2<" in html and "2.0" not in html
+    assert "1 month<" in html
+    assert "Small dog" in html
+
+
+def test_unparseable_move_in_is_shown_as_written(make_email):
+    _, html = render_reply(Tier.TIER_1, False, make_email(), ExtractedLead(zip_code="89052", bedrooms=2, move_in_date="ASAP"))
+    assert "ASAP" in html
+
+
+def test_question_heading_matches_question_count(make_email):
+    _, one = render_reply(Tier.TIER_3, False, make_email(), ExtractedLead(location="Henderson", bedrooms=2, move_in_date="ASAP"))
+    assert "A quick question to help us match you faster" in one
+    _, many = render_reply(Tier.TIER_3, False, make_email(), ExtractedLead())
+    assert "A few quick questions to help us match you faster" in many
+    assert "question(s)" not in one + many
+
+
 def test_format_budget_is_the_number_they_are_looking_for():
     # Single stated figure (current extraction: min == max)
     assert _format_budget(1800, 1800) == "$1,800/mo"
@@ -94,5 +133,5 @@ def test_long_values_are_clipped(make_email):
     _, html = render_reply(Tier.TIER_1, False, make_email(), ExtractedLead(location="x" * 200, bedrooms=2, pets=["y" * 200]))
     assert "x" * 80 + "\u2026" in html
     assert "x" * 81 not in html
-    assert "y" * 80 + "\u2026" in html
-    assert "y" * 81 not in html
+    assert "Y" + "y" * 79 + "\u2026" in html
+    assert "y" * 80 not in html
